@@ -1,0 +1,211 @@
+.panel {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
+  gap: 20px;
+}
+
+.card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--stroke);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.dropzone {
+  border: 1.5px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: rgba(10, 12, 17, 0.7);
+  transition: border 0.2s ease, background 0.2s ease;
+}
+
+.dropActive {
+  border-color: var(--accent-2);
+  background: rgba(110, 214, 198, 0.08);
+}
+
+.dropTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.dropHint {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.button {
+  background: var(--accent);
+  color: #1a1a1a;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(245, 199, 90, 0.2);
+}
+
+.buttonSecondary {
+  background: transparent;
+  border: 1px solid var(--stroke);
+  color: var(--text);
+}
+
+.buttonGhost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--stroke);
+  color: var(--text);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.select,
+.input {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+}
+
+.optionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+}
+
+.toggleRow span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.progress {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.fileList {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.fileItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.9rem;
+}
+
+.fileItem span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.outputList {
+  display: grid;
+  gap: 12px;
+}
+
+.outputItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 14, 18, 0.6);
+}
+
+.outputItem a {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+
+.outputMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.outputBadge {
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.outputHint {
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-decoration: underline;
+  cursor: help;
+}
+
+.log {
+  background: #0b0d12;
+  border-radius: 12px;
+  padding: 12px;
+  border: 1px solid var(--stroke);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.82rem;
+  max-height: 200px;
+  overflow: auto;
+  line-height: 1.4;
+}
+
+.footerNote {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 8px;
+}
+
+@media (max-width: 900px) {
+  .panel {
+    grid-template-columns: 1fr;
+  }
+}
