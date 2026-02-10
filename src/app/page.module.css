@@ -18,6 +18,37 @@
   gap: 12px;
 }
 
+.heroTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.account {
+  font-size: 0.86rem;
+  color: var(--muted);
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.logoutButton {
+  border: 1px solid var(--stroke);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.logoutButton:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .title {
   font-size: clamp(2rem, 2.8vw, 3.2rem);
   font-weight: 600;
@@ -43,4 +74,11 @@
   border: 1px solid var(--stroke);
   font-size: 0.85rem;
   color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .heroTop {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
