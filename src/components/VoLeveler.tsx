@@ -64,6 +64,7 @@ const MIX_SEGMENT_SECONDS = 75;
 const MIX_SEGMENT_MIN_DURATION_SECONDS = 105;
 const BATCH_MEMORY_GUARD_FILE_THRESHOLD = 8;
 const BATCH_MEMORY_GUARD_INTERVAL = 3;
+const LIMITER_FILTER = "alimiter=limit=-2dB:level=disabled";
 const FATAL_FFMPEG_PATTERN = /memory access out of bounds|runtimeerror/i;
 const IMPORTANT_LOG_PATTERN = /error|failed|invalid|aborted|out of bounds/i;
 
@@ -412,15 +413,17 @@ const parseDurationSeconds = (text: string) => {
   return hours * 3600 + minutes * 60 + seconds;
 };
 
-  const summarizeFailureLog = (text: string) => {
+const summarizeFailureLog = (text: string) => {
     const lines = text
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean);
     const important = lines.filter((line) => IMPORTANT_LOG_PATTERN.test(line));
-    const selected = (important.length > 0 ? important : lines).slice(-3);
-    return selected.join(" | ");
-  };
+  const selected = (important.length > 0 ? important : lines).slice(-3);
+  return selected.join(" | ");
+};
+
+const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
   const execOrThrow = async (ffmpeg: FFmpeg, args: string[], context: string) => {
     const exitCode = await ffmpeg.exec(args);
@@ -875,21 +878,39 @@ const parseDurationSeconds = (text: string) => {
     if (noiseRisk === "low") return null;
 
     const estimatedFloor = noiseFloorDb ?? (noiseRisk === "high" ? -49 : -55);
-    const sigmaDb = clamp(estimatedFloor + (noiseRisk === "high" ? 2.8 : 2.2), -56, -44);
-    const percent = noiseRisk === "high" ? 14 : 9;
-    const softness = noiseRisk === "high" ? 7.8 : 8.6;
-    const levels = noiseRisk === "high" ? 6 : 5;
-    const samples = noiseRisk === "high" ? 4096 : 2048;
+    const severeNoise = noiseRisk === "high" && estimatedFloor > -46;
+    const sigmaDb = clamp(
+      estimatedFloor + (severeNoise ? 1.8 : noiseRisk === "high" ? 2.8 : 2.2),
+      -56,
+      severeNoise ? -46 : -44
+    );
+    const percent = severeNoise ? 10 : noiseRisk === "high" ? 14 : 9;
+    const softness = severeNoise ? 9.0 : noiseRisk === "high" ? 7.8 : 8.6;
+    const levels = severeNoise ? 4 : noiseRisk === "high" ? 6 : 5;
+    const samples = severeNoise ? 1024 : noiseRisk === "high" ? 4096 : 2048;
+    const adaptiveMode = severeNoise ? 0 : 1;
 
     return `afwtdn=sigma=${sigmaDb.toFixed(
       1
-    )}dB:percent=${percent}:adaptive=1:samples=${samples}:softness=${softness.toFixed(1)}:levels=${levels}`;
+    )}dB:percent=${percent}:adaptive=${adaptiveMode}:samples=${samples}:softness=${softness.toFixed(
+      1
+    )}:levels=${levels}`;
   };
 
   type MixRenderOptions = {
     disableRoomCleanup?: boolean;
     disableAdaptiveNoiseReduction?: boolean;
     minimalStabilityChain?: boolean;
+    disableLimiter?: boolean;
+  };
+
+  const resolveAdaptiveNoiseReductionFilter = (
+    profile: AdaptiveProfile | null,
+    options?: MixRenderOptions
+  ) => {
+    if (!noiseGuard || !profile) return null;
+    if (options?.minimalStabilityChain || options?.disableAdaptiveNoiseReduction) return null;
+    return buildAdaptiveNoiseReductionFilter(profile.noiseRisk, profile.noiseFloorDb);
   };
 
   const buildMixFilter = (profile: AdaptiveProfile | null, options?: MixRenderOptions) => {
@@ -952,10 +973,7 @@ const parseDurationSeconds = (text: string) => {
     }
 
     const breath = BREATH_COMPAND[breathControl];
-    const adaptiveNoiseReductionFilter =
-      !minimalStabilityChain && !options?.disableAdaptiveNoiseReduction && noiseGuard && profile
-        ? buildAdaptiveNoiseReductionFilter(profile.noiseRisk, profile.noiseFloorDb)
-        : null;
+    const adaptiveNoiseReductionFilter = resolveAdaptiveNoiseReductionFilter(profile, options);
     const useAdaptiveNoiseReduction = adaptiveNoiseReductionFilter !== null;
     const roomGateFilter =
       roomCleanupEnabled && (profile?.useTailGate ?? false)
@@ -1050,7 +1068,9 @@ const parseDurationSeconds = (text: string) => {
     if (useAdaptiveNoiseReduction && adaptiveNoiseReductionFilter) {
       filters.push(adaptiveNoiseReductionFilter);
     }
-    filters.push("alimiter=limit=-2dB:level=disabled");
+    if (!options?.disableLimiter) {
+      filters.push(LIMITER_FILTER);
+    }
 
     return filters.join(",");
   };
@@ -1127,6 +1147,83 @@ const parseDurationSeconds = (text: string) => {
       ],
       "Mix-ready render"
     );
+  };
+
+  const runMixReadySplitAdaptiveNr = async (
+    ffmpeg: FFmpeg,
+    inputName: string,
+    outputName: string,
+    profile: AdaptiveProfile | null,
+    options?: MixRenderOptions
+  ) => {
+    const adaptiveNoiseReductionFilter = resolveAdaptiveNoiseReductionFilter(profile, options);
+    if (!adaptiveNoiseReductionFilter) {
+      throw new Error("Split adaptive-NR path unavailable.");
+    }
+
+    const preNrFilterChain = buildMixFilter(profile, {
+      ...options,
+      disableAdaptiveNoiseReduction: true,
+      disableLimiter: true,
+    });
+    const postNrFilterChain = `${adaptiveNoiseReductionFilter},${LIMITER_FILTER}`;
+    const tempName = `${sanitizeBase(outputName)}_pre_nr.wav`;
+
+    try {
+      resetLogBuffer();
+      await execOrThrow(
+        ffmpeg,
+        [
+          "-hide_banner",
+          "-nostdin",
+          "-threads",
+          "1",
+          "-filter_threads",
+          "1",
+          "-y",
+          "-i",
+          inputName,
+          "-af",
+          preNrFilterChain,
+          "-ar",
+          "48000",
+          "-ac",
+          "1",
+          "-c:a",
+          "pcm_f32le",
+          tempName,
+        ],
+        "Mix-ready pre-NR render"
+      );
+
+      resetLogBuffer();
+      await execOrThrow(
+        ffmpeg,
+        [
+          "-hide_banner",
+          "-nostdin",
+          "-threads",
+          "1",
+          "-filter_threads",
+          "1",
+          "-y",
+          "-i",
+          tempName,
+          "-af",
+          postNrFilterChain,
+          "-ar",
+          "48000",
+          "-ac",
+          "1",
+          "-c:a",
+          "pcm_f32le",
+          outputName,
+        ],
+        "Mix-ready adaptive-NR compatibility render"
+      );
+    } finally {
+      await safeDeleteFile(ffmpeg, tempName);
+    }
   };
 
   const probeInputDurationSeconds = async (ffmpeg: FFmpeg, inputName: string) => {
@@ -1563,9 +1660,38 @@ const parseDurationSeconds = (text: string) => {
               break;
             } catch (error) {
               lastMixError = error;
+              const strategyFailureMessage = describeError(error);
               if (shouldResetFfmpegForError(error)) {
                 ffmpeg = await refreshFfmpeg(`mix fallback on ${job.base}`);
                 await writeJobInput(ffmpeg, job);
+              }
+
+              const canRunSplitAdaptiveNr = resolveAdaptiveNoiseReductionFilter(profile, strategy.options) !== null;
+              if (canRunSplitAdaptiveNr) {
+                try {
+                  appendLog(
+                    `[MixFallback] ${job.base}: ${strategy.label} failed (${strategyFailureMessage}), trying ${strategy.label} with adaptive-NR compatibility split.`
+                  );
+                  await runMixReadySplitAdaptiveNr(
+                    ffmpeg,
+                    job.inputName,
+                    job.mixName,
+                    profile,
+                    strategy.options
+                  );
+                  mixRendered = true;
+                  fallbackApplied =
+                    strategyIndex === 0
+                      ? "primary chain (adaptive-NR compatibility)"
+                      : `${strategy.label} (adaptive-NR compatibility)`;
+                  break;
+                } catch (splitError) {
+                  lastMixError = splitError;
+                  if (shouldResetFfmpegForError(splitError)) {
+                    ffmpeg = await refreshFfmpeg(`adaptive-NR compatibility fallback on ${job.base}`);
+                    await writeJobInput(ffmpeg, job);
+                  }
+                }
               }
 
               const durationSeconds = await ensureInputDuration();
@@ -1574,7 +1700,9 @@ const parseDurationSeconds = (text: string) => {
 
               if (canRunSegmented && durationSeconds !== null) {
                 try {
-                  appendLog(`[MixFallback] ${job.base}: ${strategy.label} failed, trying segmented ${strategy.label}.`);
+                  appendLog(
+                    `[MixFallback] ${job.base}: ${strategy.label} failed (${strategyFailureMessage}), trying segmented ${strategy.label}.`
+                  );
                   await runMixReadySegmented(
                     ffmpeg,
                     job.inputName,
@@ -1598,8 +1726,9 @@ const parseDurationSeconds = (text: string) => {
 
               const hasMoreStrategies = strategyIndex < fallbackStrategies.length - 1;
               if (hasMoreStrategies) {
+                const finalFailureMessage = describeError(lastMixError);
                 appendLog(
-                  `[MixFallback] ${job.base}: ${strategy.label} failed, trying ${fallbackStrategies[
+                  `[MixFallback] ${job.base}: ${strategy.label} failed (${finalFailureMessage}), trying ${fallbackStrategies[
                     strategyIndex + 1
                   ]?.label}.`
                 );
