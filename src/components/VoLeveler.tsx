@@ -60,6 +60,8 @@ const ANALYSIS_SAMPLE_SECONDS = 180;
 const ANALYSIS_SAMPLE_RATE = 16000;
 const ENVELOPE_FRAME_MS = 10;
 const ENVELOPE_FLOOR_DB = -120;
+const MIX_SEGMENT_SECONDS = 75;
+const MIX_SEGMENT_MIN_DURATION_SECONDS = 105;
 const BATCH_MEMORY_GUARD_FILE_THRESHOLD = 8;
 const BATCH_MEMORY_GUARD_INTERVAL = 3;
 const FATAL_FFMPEG_PATTERN = /memory access out of bounds|runtimeerror/i;
@@ -388,15 +390,27 @@ export default function VoLeveler() {
     }
   };
 
-  const parseRmsFromAstats = (text: string) => {
+const parseRmsFromAstats = (text: string) => {
     const matches = text.match(/RMS level dB:\s*(-?(?:\d+(?:\.\d+)?|inf))/gi);
     if (!matches || matches.length === 0) return null;
     const raw = matches[matches.length - 1].split(":").at(-1)?.trim().toLowerCase();
     if (!raw) return null;
     if (raw === "-inf" || raw === "inf") return -120;
-    const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseDurationSeconds = (text: string) => {
+  const match = text.match(/Duration:\s*(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/i);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+    return null;
+  }
+  return hours * 3600 + minutes * 60 + seconds;
+};
 
   const summarizeFailureLog = (text: string) => {
     const lines = text
@@ -875,6 +889,7 @@ export default function VoLeveler() {
   type MixRenderOptions = {
     disableRoomCleanup?: boolean;
     disableAdaptiveNoiseReduction?: boolean;
+    minimalStabilityChain?: boolean;
   };
 
   const buildMixFilter = (profile: AdaptiveProfile | null, options?: MixRenderOptions) => {
@@ -882,7 +897,8 @@ export default function VoLeveler() {
     const levelerSettings = LEVELER_PRESETS[leveler];
     const consistency = LEVELER_CONSISTENCY[leveler];
     const dyn = levelerSettings.dyna;
-    const roomCleanupEnabled = roomCleanup && !options?.disableRoomCleanup;
+    const minimalStabilityChain = options?.minimalStabilityChain === true;
+    const roomCleanupEnabled = roomCleanup && !options?.disableRoomCleanup && !minimalStabilityChain;
 
     if (eqCleanup) {
       const highpassHz = profile?.highpassHz ?? 80;
@@ -897,28 +913,35 @@ export default function VoLeveler() {
       let dynaM: number = noiseGuard ? Math.max(3, dyn.m - 1) : dyn.m;
       let dynaThresholdAmp = 0;
 
-      if (profile) {
-        const adaptiveLift = profile.levelingNeed * 1.8;
-        const emotionRelax = profile.emotionProtection * 1.2;
-        dynaG = Math.max(3, dynaG + adaptiveLift - profile.dynaTrim - emotionRelax);
-        dynaM = Math.max(3, dynaM + adaptiveLift - profile.dynaTrim - emotionRelax);
+      if (!minimalStabilityChain) {
+        if (profile) {
+          const adaptiveLift = profile.levelingNeed * 1.8;
+          const emotionRelax = profile.emotionProtection * 1.2;
+          dynaG = Math.max(3, dynaG + adaptiveLift - profile.dynaTrim - emotionRelax);
+          dynaM = Math.max(3, dynaM + adaptiveLift - profile.dynaTrim - emotionRelax);
 
-        // Noisy takes need slower and lower lift to avoid raising room noise in pauses.
-        if (noiseGuard) {
-          if (profile.noiseRisk === "high" || (profile.noiseFloorDb ?? -70) > -46) {
-            dynaF = Math.max(dynaF, 321);
-            dynaG = Math.min(dynaG, 3);
-            dynaM = Math.min(dynaM, 3);
-            const gateDb = clamp((profile.noiseFloorDb ?? -46) + 5.8, -56, -38);
-            dynaThresholdAmp = fromDb(gateDb);
-          } else if (profile.noiseRisk === "medium" || (profile.noiseFloorDb ?? -70) > -52) {
-            dynaF = Math.max(dynaF, 341);
-            dynaG = Math.min(dynaG, 4);
-            dynaM = Math.min(dynaM, 5);
-            const gateDb = clamp((profile.noiseFloorDb ?? -50) + 4.6, -58, -40);
-            dynaThresholdAmp = fromDb(gateDb);
+          // Noisy takes need slower and lower lift to avoid raising room noise in pauses.
+          if (noiseGuard) {
+            if (profile.noiseRisk === "high" || (profile.noiseFloorDb ?? -70) > -46) {
+              dynaF = Math.max(dynaF, 321);
+              dynaG = Math.min(dynaG, 3);
+              dynaM = Math.min(dynaM, 3);
+              const gateDb = clamp((profile.noiseFloorDb ?? -46) + 5.8, -56, -38);
+              dynaThresholdAmp = fromDb(gateDb);
+            } else if (profile.noiseRisk === "medium" || (profile.noiseFloorDb ?? -70) > -52) {
+              dynaF = Math.max(dynaF, 341);
+              dynaG = Math.min(dynaG, 4);
+              dynaM = Math.min(dynaM, 5);
+              const gateDb = clamp((profile.noiseFloorDb ?? -50) + 4.6, -58, -40);
+              dynaThresholdAmp = fromDb(gateDb);
+            }
           }
         }
+      } else {
+        // Stability-safe fallback keeps mandatory leveler but removes adaptive modifiers.
+        dynaF = dyn.f;
+        dynaG = dyn.g;
+        dynaM = dyn.m;
       }
 
       const dynaGInt = toOddInt(dynaG, 3, 301);
@@ -930,7 +953,7 @@ export default function VoLeveler() {
 
     const breath = BREATH_COMPAND[breathControl];
     const adaptiveNoiseReductionFilter =
-      !options?.disableAdaptiveNoiseReduction && noiseGuard && profile
+      !minimalStabilityChain && !options?.disableAdaptiveNoiseReduction && noiseGuard && profile
         ? buildAdaptiveNoiseReductionFilter(profile.noiseRisk, profile.noiseFloorDb)
         : null;
     const useAdaptiveNoiseReduction = adaptiveNoiseReductionFilter !== null;
@@ -945,13 +968,13 @@ export default function VoLeveler() {
     const useFloorGuard = !useRoomGate && floorGuard && (breath === null || preferFloorGuard);
     const useBreathCompand = !useRoomGate && breath !== null && !useFloorGuard;
 
-    if (useRoomGate && roomGateFilter) {
+    if (!minimalStabilityChain && useRoomGate && roomGateFilter) {
       filters.push(roomGateFilter);
     }
-    if (useBreathCompand) {
+    if (!minimalStabilityChain && useBreathCompand) {
       filters.push(breath);
     }
-    if (useFloorGuard) {
+    if (!minimalStabilityChain && useFloorGuard) {
       filters.push(profile?.floorGuardFilter ?? FLOOR_GUARD);
     }
 
@@ -968,17 +991,17 @@ export default function VoLeveler() {
     );
     const netAirGain = clamp(baseAirCut + (profile?.airGainDb ?? 0) - harshAirCut, -2.7, 0.45);
 
-    if (Math.abs(netPresenceGain) >= 0.2) {
+    if (!minimalStabilityChain && Math.abs(netPresenceGain) >= 0.2) {
       filters.push(`equalizer=f=3500:width_type=q:width=1.15:g=${netPresenceGain.toFixed(2)}`);
     }
-    if (Math.abs(netAirGain) >= 0.2) {
+    if (!minimalStabilityChain && Math.abs(netAirGain) >= 0.2) {
       filters.push(`equalizer=f=8000:width_type=q:width=0.75:g=${netAirGain.toFixed(2)}`);
     }
-    if ((profile?.topEndHarshnessCutDb ?? 0) >= 0.45) {
+    if (!minimalStabilityChain && (profile?.topEndHarshnessCutDb ?? 0) >= 0.45) {
       const topShelfCut = clamp(-0.35 - (profile?.topEndHarshnessCutDb ?? 0) * 0.55, -1.1, -0.35);
       filters.push(`equalizer=f=11200:width_type=q:width=0.7:g=${topShelfCut.toFixed(2)}`);
     }
-    if (roomCleanupEnabled && (profile?.echoNotchCutDb ?? 0) >= 0.25) {
+    if (!minimalStabilityChain && roomCleanupEnabled && (profile?.echoNotchCutDb ?? 0) >= 0.25) {
       const echoNotchGain = -clamp(profile?.echoNotchCutDb ?? 0, 0.25, 0.6);
       filters.push(`equalizer=f=2450:width_type=q:width=1.4:g=${echoNotchGain.toFixed(2)}`);
     }
@@ -986,10 +1009,10 @@ export default function VoLeveler() {
     const thresholdBase = parseFloat(levelerSettings.compressor.threshold.replace("dB", ""));
     const ratioBase = parseFloat(levelerSettings.compressor.ratio);
 
-    let thresholdAdjust = profile?.compressorThresholdOffsetDb ?? 0;
-    let ratioAdjust = profile?.compressorRatioOffset ?? 0;
-    const levelingNeed = profile?.levelingNeed ?? 0;
-    const emotionProtection = profile?.emotionProtection ?? 0;
+    let thresholdAdjust = minimalStabilityChain ? 0 : (profile?.compressorThresholdOffsetDb ?? 0);
+    let ratioAdjust = minimalStabilityChain ? 0 : (profile?.compressorRatioOffset ?? 0);
+    const levelingNeed = minimalStabilityChain ? 0 : (profile?.levelingNeed ?? 0);
+    const emotionProtection = minimalStabilityChain ? 0 : (profile?.emotionProtection ?? 0);
 
     // Keep upstream processors from sounding overcontrolled.
     if (dyn) {
@@ -1100,6 +1123,118 @@ export default function VoLeveler() {
       ],
       "Mix-ready render"
     );
+  };
+
+  const probeInputDurationSeconds = async (ffmpeg: FFmpeg, inputName: string) => {
+    resetLogBuffer();
+    await execOrThrow(
+      ffmpeg,
+      [
+        "-hide_banner",
+        "-nostdin",
+        "-i",
+        inputName,
+        "-t",
+        "0.1",
+        "-f",
+        "null",
+        "-",
+      ],
+      "Duration probe"
+    );
+    const logText = resetLogBuffer();
+    return parseDurationSeconds(logText);
+  };
+
+  const runMixReadySegmented = async (
+    ffmpeg: FFmpeg,
+    inputName: string,
+    outputName: string,
+    profile: AdaptiveProfile | null,
+    durationSeconds: number,
+    options?: MixRenderOptions
+  ) => {
+    if (durationSeconds < MIX_SEGMENT_MIN_DURATION_SECONDS) {
+      throw new Error("Segmented render skipped (input too short).");
+    }
+    const segmentCount = Math.ceil(durationSeconds / MIX_SEGMENT_SECONDS);
+    if (segmentCount < 2) {
+      throw new Error("Segmented render skipped (single segment).");
+    }
+
+    const filterChain = buildMixFilter(profile, options);
+    const tempBase = sanitizeBase(outputName);
+    const segmentNames: string[] = [];
+    const concatListName = `${tempBase}_segments.txt`;
+
+    try {
+      for (let index = 0; index < segmentCount; index += 1) {
+        const start = index * MIX_SEGMENT_SECONDS;
+        const remaining = durationSeconds - start;
+        const span = Math.min(MIX_SEGMENT_SECONDS, Math.max(remaining, 0));
+        if (span <= 0.01) break;
+        const segmentName = `${tempBase}_seg_${index + 1}.wav`;
+        segmentNames.push(segmentName);
+
+        resetLogBuffer();
+        await execOrThrow(
+          ffmpeg,
+          [
+            "-hide_banner",
+            "-nostdin",
+            "-y",
+            "-ss",
+            start.toFixed(3),
+            "-t",
+            span.toFixed(3),
+            "-i",
+            inputName,
+            "-af",
+            filterChain,
+            "-ar",
+            "48000",
+            "-ac",
+            "1",
+            "-c:a",
+            "pcm_f32le",
+            segmentName,
+          ],
+          `Segment mix-ready render ${index + 1}/${segmentCount}`
+        );
+      }
+
+      if (segmentNames.length < 2) {
+        throw new Error("Segmented render produced insufficient segments.");
+      }
+
+      const concatList = `${segmentNames.map((name) => `file '${name}'`).join("\n")}\n`;
+      await ffmpeg.writeFile(concatListName, new TextEncoder().encode(concatList));
+
+      resetLogBuffer();
+      await execOrThrow(
+        ffmpeg,
+        [
+          "-hide_banner",
+          "-nostdin",
+          "-y",
+          "-f",
+          "concat",
+          "-safe",
+          "0",
+          "-i",
+          concatListName,
+          "-c",
+          "copy",
+          outputName,
+        ],
+        "Segment concat render"
+      );
+    } finally {
+      await safeDeleteFile(ffmpeg, concatListName);
+      for (const segmentName of segmentNames) {
+        await safeDeleteFile(ffmpeg, segmentName);
+      }
+    }
   };
 
   const runBlendMixReady = async (
@@ -1319,7 +1454,8 @@ export default function VoLeveler() {
         let blendRendered = false;
 
         try {
-          await ffmpeg.writeFile(job.inputName, await fetchFile(job.file));
+          const inputData = await fetchFile(job.file);
+          await ffmpeg.writeFile(job.inputName, inputData);
           const profile = buildAdaptiveProfile(analysisByBase.get(job.base), batchReference);
           const roomScore = profile ? (analysisByBase.get(job.base)?.roomScore ?? 0) : null;
 
@@ -1364,10 +1500,29 @@ export default function VoLeveler() {
               options: { disableRoomCleanup: true, disableAdaptiveNoiseReduction: true },
             });
           }
+          fallbackStrategies.push({
+            label: "stability-safe chain",
+            options: {
+              disableRoomCleanup: true,
+              disableAdaptiveNoiseReduction: true,
+              minimalStabilityChain: true,
+            },
+          });
 
           let mixRendered = false;
           let fallbackApplied: string | null = null;
           let lastMixError: unknown = null;
+          let inputDurationSeconds: number | null | undefined = undefined;
+
+          const ensureInputDuration = async () => {
+            if (inputDurationSeconds !== undefined) return inputDurationSeconds;
+            try {
+              inputDurationSeconds = await probeInputDurationSeconds(ffmpeg, job.inputName);
+            } catch {
+              inputDurationSeconds = null;
+            }
+            return inputDurationSeconds;
+          };
 
           for (let strategyIndex = 0; strategyIndex < fallbackStrategies.length; strategyIndex += 1) {
             const strategy = fallbackStrategies[strategyIndex];
@@ -1378,6 +1533,39 @@ export default function VoLeveler() {
               break;
             } catch (error) {
               lastMixError = error;
+              if (shouldResetFfmpegForError(error)) {
+                ffmpeg = await refreshFfmpeg(`mix fallback on ${job.base}`);
+                await ffmpeg.writeFile(job.inputName, inputData);
+              }
+
+              const durationSeconds = await ensureInputDuration();
+              const canRunSegmented =
+                durationSeconds !== null && durationSeconds >= MIX_SEGMENT_MIN_DURATION_SECONDS;
+
+              if (canRunSegmented && durationSeconds !== null) {
+                try {
+                  appendLog(`[MixFallback] ${job.base}: ${strategy.label} failed, trying segmented ${strategy.label}.`);
+                  await runMixReadySegmented(
+                    ffmpeg,
+                    job.inputName,
+                    job.mixName,
+                    profile,
+                    durationSeconds,
+                    strategy.options
+                  );
+                  mixRendered = true;
+                  fallbackApplied =
+                    strategyIndex === 0 ? "primary chain (segmented)" : `${strategy.label} (segmented)`;
+                  break;
+                } catch (segmentedError) {
+                  lastMixError = segmentedError;
+                  if (shouldResetFfmpegForError(segmentedError)) {
+                    ffmpeg = await refreshFfmpeg(`segmented mix fallback on ${job.base}`);
+                    await ffmpeg.writeFile(job.inputName, inputData);
+                  }
+                }
+              }
+
               const hasMoreStrategies = strategyIndex < fallbackStrategies.length - 1;
               if (hasMoreStrategies) {
                 appendLog(
