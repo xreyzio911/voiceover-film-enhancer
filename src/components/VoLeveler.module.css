@@ -1,3 +1,8 @@
+.layout {
+  display: grid;
+  gap: 18px;
+}
+
 .panel {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
@@ -283,6 +288,10 @@
 }
 
 @media (max-width: 900px) {
+  .layout {
+    gap: 14px;
+  }
+
   .panel {
     grid-template-columns: 1fr;
   }

@@ -1969,7 +1969,7 @@ const summarizeFailureReason = (error: unknown) => {
   };
 
   return (
-    <div>
+    <div className={styles.layout}>
       <div className={styles.panel}>
         <div className={styles.card}>
           <div
