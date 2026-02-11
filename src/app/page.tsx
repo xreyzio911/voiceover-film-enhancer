@@ -21,16 +21,12 @@ export default async function Home() {
             <div className={styles.account}>{email}</div>
             <SignOutButton className={styles.logoutButton} />
           </div>
-          <h1 className={styles.title}>VO Batch Leveler</h1>
-          <p className={styles.subtitle}>
-            Film-grade VO leveling with adaptive tone matching and broadcast loudness targets.
-            Runs entirely in the browser so the internal team can process files without uploading
-            to a server.
-          </p>
+          <h1 className={styles.title}>Shorts Projektt Internal VO Optimizer</h1>
+          <p className={styles.subtitle}>Internal tool for VO leveling and delivery exports.</p>
           <div className={styles.badges}>
             <span className={styles.badge}>48 kHz / 32-bit float</span>
             <span className={styles.badge}>ATSC A/85 + EBU R128</span>
-            <span className={styles.badge}>Gentle leveler presets</span>
+            <span className={styles.badge}>Batch processing</span>
           </div>
         </header>
         <VoLeveler />

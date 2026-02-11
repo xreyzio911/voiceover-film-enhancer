@@ -1,24 +1,28 @@
 .panel {
   display: grid;
   grid-template-columns: minmax(280px, 1fr) minmax(320px, 1fr);
-  gap: 20px;
+  gap: 16px;
 }
 
 .card {
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
   border: 1px solid var(--stroke);
   border-radius: 20px;
-  padding: 20px;
+  padding: 18px;
   box-shadow: var(--shadow);
+}
+
+.card h3 {
+  margin: 0;
 }
 
 .dropzone {
   border: 1.5px dashed rgba(255, 255, 255, 0.18);
   border-radius: 18px;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   background: rgba(10, 12, 17, 0.7);
   transition: border 0.2s ease, background 0.2s ease;
 }
@@ -41,7 +45,11 @@
 .controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
+}
+
+.sectionTop {
+  margin-top: 12px;
 }
 
 .button {
@@ -75,7 +83,7 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
 }
 
 .label {
@@ -95,18 +103,22 @@
 .optionGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .toggleRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 11px 12px;
   border-radius: 12px;
   background: var(--panel);
   border: 1px solid var(--stroke);
+}
+
+.toggleRow + .toggleRow {
+  margin-top: 8px;
 }
 
 .toggleRow span {
@@ -122,7 +134,7 @@
 
 .fileList {
   display: grid;
-  gap: 8px;
+  gap: 7px;
   max-height: 180px;
   overflow: auto;
   padding-right: 6px;
@@ -146,13 +158,13 @@
 
 .outputList {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .outputItem {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   padding: 12px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -167,7 +179,7 @@
 .outputMeta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 6px;
 }
 
@@ -201,7 +213,73 @@
 .footerNote {
   color: var(--muted);
   font-size: 0.85rem;
-  margin-top: 8px;
+  margin-top: 10px;
+  line-height: 1.45;
+}
+
+.warningOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 4, 10, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 40;
+}
+
+.warningCard {
+  width: min(680px, 100%);
+  border-radius: 16px;
+  padding: 18px;
+  border: 1px solid rgba(245, 199, 90, 0.4);
+  background: linear-gradient(160deg, rgba(30, 25, 13, 0.94), rgba(17, 19, 24, 0.95));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.warningCard h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.warningText {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.warningList {
+  max-height: 240px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.warningItem {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.warningItem strong {
+  font-size: 0.9rem;
+}
+
+.warningItem span {
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.warningActions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 900px) {

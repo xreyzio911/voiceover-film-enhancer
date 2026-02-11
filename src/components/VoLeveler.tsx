@@ -231,6 +231,12 @@ type JobEntry = {
   blendMixName: string;
 };
 
+type FailedOptimization = {
+  base: string;
+  fileName: string;
+  reason: string;
+};
+
 const createEmptyAnalysis = (): FileAnalysis => ({
   inputI: null,
   inputLRA: null,
@@ -261,6 +267,8 @@ export default function VoLeveler() {
   const [zipBusy, setZipBusy] = useState(false);
   const [zipProgress, setZipProgress] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+  const [failedOptimizations, setFailedOptimizations] = useState<FailedOptimization[]>([]);
+  const [showFailureWarning, setShowFailureWarning] = useState(false);
 
   const [loudnessTarget, setLoudnessTarget] = useState<keyof typeof LOUDNESS_PRESETS>(
     "ATSC A/85 (-24 LKFS, -2 dBTP)"
@@ -424,6 +432,11 @@ const summarizeFailureLog = (text: string) => {
 };
 
 const describeError = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const summarizeFailureReason = (error: unknown) => {
+  const compact = describeError(error).replace(/\s+/g, " ").trim();
+  if (compact.length <= 180) return compact;
+  return `${compact.slice(0, 177)}...`;
+};
 
   const execOrThrow = async (ffmpeg: FFmpeg, args: string[], context: string) => {
     const exitCode = await ffmpeg.exec(args);
@@ -1561,6 +1574,8 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
     setLoading(true);
     setOutputs([]);
     setLogs([]);
+    setFailedOptimizations([]);
+    setShowFailureWarning(false);
     setStatus("Preparing...");
 
     try {
@@ -1615,6 +1630,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
       }
 
       let hadErrors = false;
+      const failedRuns: FailedOptimization[] = [];
       for (let i = 0; i < jobs.length; i += 1) {
         const job = jobs[i];
         let cleanLoudName: string | null = null;
@@ -1837,7 +1853,13 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
           }
         } catch (error) {
           hadErrors = true;
-          appendLog(`Error (${job.base}): ${error instanceof Error ? error.message : String(error)}`);
+          const reason = summarizeFailureReason(error);
+          failedRuns.push({
+            base: job.base,
+            fileName: job.file.name,
+            reason,
+          });
+          appendLog(`Error (${job.base}): ${reason}`);
           if (shouldResetFfmpegForError(error)) {
             ffmpeg = await refreshFfmpeg(`processing failure on ${job.base}`);
           }
@@ -1859,6 +1881,13 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
       }
 
       setOutputs(outputEntries);
+      if (failedRuns.length > 0) {
+        setFailedOptimizations(failedRuns);
+        setShowFailureWarning(true);
+        appendLog(
+          `[Warning] ${failedRuns.length} file(s) failed to optimize. Re-submit only the failed files and run again.`
+        );
+      }
       setStatus(hadErrors ? "Done with warnings" : "Done");
     } catch (err) {
       appendLog(`Error: ${err instanceof Error ? err.message : String(err)}`);
@@ -2046,7 +2075,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
                 ))}
               </select>
               <div className={styles.label}>
-                Smart consistency with emotion protection (tighter average level, preserved performance peaks).
+                Balances consistency while keeping performance peaks.
               </div>
             </div>
             <div className={styles.field}>
@@ -2093,7 +2122,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
             <div>
               <strong>Room cleanup (auto detect)</strong>
               <div className={styles.label}>
-                Detects mild room echo/reverb and applies subtle denoise + tail control only when needed.
+                Reduces mild room echo/reverb only when needed.
               </div>
             </div>
             <input
@@ -2152,7 +2181,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
             />
           </div>
 
-          <div className={styles.controls} style={{ marginTop: 12 }}>
+          <div className={`${styles.controls} ${styles.sectionTop}`}>
             <button className={styles.button} onClick={processFiles} disabled={loading || files.length === 0}>
               {loading ? "Processing..." : "Run Batch"}
             </button>
@@ -2162,6 +2191,8 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
                 setFiles([]);
                 setOutputs([]);
                 setLogs([]);
+                setFailedOptimizations([]);
+                setShowFailureWarning(false);
                 setStatus("Idle");
               }}
               disabled={loading}
@@ -2172,7 +2203,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
           </div>
 
           <div className={styles.footerNote}>
-            Smart Voice Match, room cleanup, and scene blend are sequenced to avoid clashing processors.
+            Processing order is tuned to avoid processor clashes.
           </div>
         </div>
       </div>
@@ -2181,7 +2212,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
         <div className={styles.card}>
           <h3>Outputs</h3>
           {outputs.length > 0 && (
-            <div className={styles.controls} style={{ marginTop: 12 }}>
+            <div className={`${styles.controls} ${styles.sectionTop}`}>
               <button
                 className={`${styles.button} ${styles.buttonSecondary}`}
                 onClick={downloadOutputsZip}
@@ -2191,7 +2222,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
               </button>
             </div>
           )}
-          <div className={styles.outputList} style={{ marginTop: 12 }}>
+          <div className={`${styles.outputList} ${styles.sectionTop}`}>
             {outputs.length === 0 && <div className={styles.dropHint}>No output yet.</div>}
             {outputs.map((output, index) => (
               <div className={styles.outputItem} key={`${output.name}-${output.size}-${index}`}>
@@ -2242,14 +2273,37 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
         </div>
         <div className={styles.card}>
           <h3>Processing Log</h3>
-          <div className={styles.log} style={{ marginTop: 12 }}>
+          <div className={`${styles.log} ${styles.sectionTop}`}>
             {logs.length === 0 ? "No logs yet." : logs.join("\n")}
           </div>
           <div className={styles.footerNote}>
-            If processing feels slow, reduce batch size or disable Smart Voice Match / Room cleanup / Scene blend.
+            If processing feels slow, run a smaller batch or disable extra features.
           </div>
         </div>
       </div>
+      {showFailureWarning && failedOptimizations.length > 0 && (
+        <div className={styles.warningOverlay} role="alertdialog" aria-modal="true" aria-labelledby="failed-title">
+          <div className={styles.warningCard}>
+            <h3 id="failed-title">Some files need re-submission</h3>
+            <p className={styles.warningText}>
+              Some audio files failed to optimize on this run. Please re-submit only these files and run again.
+            </p>
+            <div className={styles.warningList}>
+              {failedOptimizations.map((item, index) => (
+                <div className={styles.warningItem} key={`${item.base}-${index}`}>
+                  <strong>{item.fileName}</strong>
+                  <span>{item.reason}</span>
+                </div>
+              ))}
+            </div>
+            <div className={styles.warningActions}>
+              <button className={styles.button} onClick={() => setShowFailureWarning(false)}>
+                Understood
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
