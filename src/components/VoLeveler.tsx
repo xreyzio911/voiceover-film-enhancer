@@ -879,22 +879,24 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
 
     const estimatedFloor = noiseFloorDb ?? (noiseRisk === "high" ? -49 : -55);
     const severeNoise = noiseRisk === "high" && estimatedFloor > -46;
-    const sigmaDb = clamp(
-      estimatedFloor + (severeNoise ? 1.8 : noiseRisk === "high" ? 2.8 : 2.2),
-      -56,
-      severeNoise ? -46 : -44
-    );
-    const percent = severeNoise ? 10 : noiseRisk === "high" ? 14 : 9;
-    const softness = severeNoise ? 9.0 : noiseRisk === "high" ? 7.8 : 8.6;
-    const levels = severeNoise ? 4 : noiseRisk === "high" ? 6 : 5;
-    const samples = severeNoise ? 1024 : noiseRisk === "high" ? 4096 : 2048;
-    const adaptiveMode = severeNoise ? 0 : 1;
+
+    // WASM ffmpeg can become unstable with afwtdn on very noisy sources; use a
+    // conservative spectral NR in that specific case to keep NR active.
+    if (severeNoise) {
+      const nf = clamp(estimatedFloor + 3.5, -46, -34);
+      const nr = clamp(Math.round(8 + (estimatedFloor + 46) * 0.35), 8, 12);
+      return `afftdn=nf=${nf.toFixed(1)}:nr=${nr}:tn=1`;
+    }
+
+    const sigmaDb = clamp(estimatedFloor + (noiseRisk === "high" ? 2.8 : 2.2), -56, -44);
+    const percent = noiseRisk === "high" ? 14 : 9;
+    const softness = noiseRisk === "high" ? 7.8 : 8.6;
+    const levels = noiseRisk === "high" ? 6 : 5;
+    const samples = noiseRisk === "high" ? 4096 : 2048;
 
     return `afwtdn=sigma=${sigmaDb.toFixed(
       1
-    )}dB:percent=${percent}:adaptive=${adaptiveMode}:samples=${samples}:softness=${softness.toFixed(
-      1
-    )}:levels=${levels}`;
+    )}dB:percent=${percent}:adaptive=1:samples=${samples}:softness=${softness.toFixed(1)}:levels=${levels}`;
   };
 
   type MixRenderOptions = {
@@ -1585,6 +1587,13 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
           await writeJobInput(ffmpeg, job);
           const profile = buildAdaptiveProfile(analysisByBase.get(job.base), batchReference);
           const roomScore = profile ? (analysisByBase.get(job.base)?.roomScore ?? 0) : null;
+          const adaptiveNoiseReductionFilter = profile ? resolveAdaptiveNoiseReductionFilter(profile) : null;
+          const adaptiveNoiseReductionLabel =
+            adaptiveNoiseReductionFilter === null
+              ? "off"
+              : adaptiveNoiseReductionFilter.trim().toLowerCase().startsWith("afftdn=")
+                ? "on(spectral)"
+                : "on(wavelet)";
 
           if (profile) {
             appendLog(
@@ -1594,7 +1603,7 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
                 roomScore ?? 0
               ).toFixed(2)}), noise ${profile.noiseRisk} (${(profile.noiseFloorDb ?? -70).toFixed(
                 1
-              )} dB; adaptive-NR ${noiseGuard && profile.noiseRisk !== "low" ? "on" : "off"}), echo ${
+              )} dB; adaptive-NR ${adaptiveNoiseReductionLabel}), echo ${
                 analysisByBase.get(job.base)?.echoDelayMs ?? 0
               } ms, blend ${
                 (profile.blendIndoorGain * 100).toFixed(1)
@@ -1666,7 +1675,10 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
                 await writeJobInput(ffmpeg, job);
               }
 
-              const canRunSplitAdaptiveNr = resolveAdaptiveNoiseReductionFilter(profile, strategy.options) !== null;
+              const adaptiveNoiseReductionFilter = resolveAdaptiveNoiseReductionFilter(profile, strategy.options);
+              const canRunSplitAdaptiveNr =
+                adaptiveNoiseReductionFilter !== null &&
+                adaptiveNoiseReductionFilter.trim().toLowerCase().startsWith("afwtdn=");
               if (canRunSplitAdaptiveNr) {
                 try {
                   appendLog(
