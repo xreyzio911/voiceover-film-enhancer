@@ -1108,6 +1108,10 @@ const parseDurationSeconds = (text: string) => {
       [
         "-hide_banner",
         "-nostdin",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
         "-y",
         "-i",
         inputName,
@@ -1178,13 +1182,17 @@ const parseDurationSeconds = (text: string) => {
 
         resetLogBuffer();
         await execOrThrow(
-          ffmpeg,
-          [
-            "-hide_banner",
-            "-nostdin",
-            "-y",
-            "-ss",
-            start.toFixed(3),
+      ffmpeg,
+      [
+        "-hide_banner",
+        "-nostdin",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
+        "-y",
+        "-ss",
+        start.toFixed(3),
             "-t",
             span.toFixed(3),
             "-i",
@@ -1212,13 +1220,15 @@ const parseDurationSeconds = (text: string) => {
 
       resetLogBuffer();
       await execOrThrow(
-        ffmpeg,
-        [
-          "-hide_banner",
-          "-nostdin",
-          "-y",
-          "-f",
-          "concat",
+      ffmpeg,
+      [
+        "-hide_banner",
+        "-nostdin",
+        "-threads",
+        "1",
+        "-y",
+        "-f",
+        "concat",
           "-safe",
           "0",
           "-i",
@@ -1250,6 +1260,10 @@ const parseDurationSeconds = (text: string) => {
       [
         "-hide_banner",
         "-nostdin",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
         "-y",
         "-i",
         inputName,
@@ -1279,6 +1293,10 @@ const parseDurationSeconds = (text: string) => {
       [
         "-hide_banner",
         "-nostdin",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
         "-y",
         "-i",
         inputName,
@@ -1308,6 +1326,10 @@ const parseDurationSeconds = (text: string) => {
       [
         "-hide_banner",
         "-nostdin",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
         "-i",
         inputName,
         "-af",
@@ -1346,6 +1368,10 @@ const parseDurationSeconds = (text: string) => {
       [
         "-hide_banner",
         "-nostdin",
+        "-threads",
+        "1",
+        "-filter_threads",
+        "1",
         "-y",
         "-i",
         inputName,
