@@ -1388,6 +1388,11 @@ const parseDurationSeconds = (text: string) => {
     });
   };
 
+  const writeJobInput = async (ffmpeg: FFmpeg, job: JobEntry) => {
+    // Use a fresh buffer every write; FFmpeg worker postMessage can detach transferred ArrayBuffers.
+    await ffmpeg.writeFile(job.inputName, await fetchFile(job.file));
+  };
+
   const processFiles = async () => {
     if (!files.length) return;
     setLoading(true);
@@ -1411,7 +1416,7 @@ const parseDurationSeconds = (text: string) => {
           const job = jobs[i];
           setStatus(`Analyze: ${job.base} (${i + 1}/${jobs.length})`);
           try {
-            await ffmpeg.writeFile(job.inputName, await fetchFile(job.file));
+            await writeJobInput(ffmpeg, job);
             const analysis = await analyzeFile(ffmpeg, job.inputName);
             analysisByBase.set(job.base, analysis);
             analyses.push(analysis);
@@ -1454,8 +1459,7 @@ const parseDurationSeconds = (text: string) => {
         let blendRendered = false;
 
         try {
-          const inputData = await fetchFile(job.file);
-          await ffmpeg.writeFile(job.inputName, inputData);
+          await writeJobInput(ffmpeg, job);
           const profile = buildAdaptiveProfile(analysisByBase.get(job.base), batchReference);
           const roomScore = profile ? (analysisByBase.get(job.base)?.roomScore ?? 0) : null;
 
@@ -1535,7 +1539,7 @@ const parseDurationSeconds = (text: string) => {
               lastMixError = error;
               if (shouldResetFfmpegForError(error)) {
                 ffmpeg = await refreshFfmpeg(`mix fallback on ${job.base}`);
-                await ffmpeg.writeFile(job.inputName, inputData);
+                await writeJobInput(ffmpeg, job);
               }
 
               const durationSeconds = await ensureInputDuration();
@@ -1561,7 +1565,7 @@ const parseDurationSeconds = (text: string) => {
                   lastMixError = segmentedError;
                   if (shouldResetFfmpegForError(segmentedError)) {
                     ffmpeg = await refreshFfmpeg(`segmented mix fallback on ${job.base}`);
-                    await ffmpeg.writeFile(job.inputName, inputData);
+                    await writeJobInput(ffmpeg, job);
                   }
                 }
               }
