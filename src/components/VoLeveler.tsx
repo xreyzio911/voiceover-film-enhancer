@@ -60,6 +60,8 @@ const ANALYSIS_SAMPLE_SECONDS = 180;
 const ANALYSIS_SAMPLE_RATE = 16000;
 const ENVELOPE_FRAME_MS = 10;
 const ENVELOPE_FLOOR_DB = -120;
+const BATCH_MEMORY_GUARD_FILE_THRESHOLD = 8;
+const BATCH_MEMORY_GUARD_INTERVAL = 3;
 const FATAL_FFMPEG_PATTERN = /memory access out of bounds|runtimeerror/i;
 const IMPORTANT_LOG_PATTERN = /error|failed|invalid|aborted|out of bounds/i;
 
@@ -150,6 +152,11 @@ const parseMaybeNumber = (value: unknown): number | null => {
 
 const formatSigned = (value: number, decimals = 1) =>
   `${value >= 0 ? "+" : ""}${value.toFixed(decimals)}`;
+
+const shouldRecycleFfmpegForBatch = (completedCount: number, totalCount: number) =>
+  totalCount >= BATCH_MEMORY_GUARD_FILE_THRESHOLD &&
+  completedCount < totalCount &&
+  completedCount % BATCH_MEMORY_GUARD_INTERVAL === 0;
 
 type OutputEntry = {
   name: string;
@@ -740,12 +747,13 @@ export default function VoLeveler() {
     const compressorThresholdOffsetDb = clamp(lraDiff * 0.6 * dynamicsFactor, -1.5, 1.5);
 
     const measuredNoiseFloor = analysis.noiseFloorDb ?? -70;
-    const noiseRisk: NoiseRisk =
-      (analysis.inputThresh !== null && analysis.inputThresh > -35) || measuredNoiseFloor > -46
-        ? "high"
-        : (analysis.inputThresh !== null && analysis.inputThresh > -40) || measuredNoiseFloor > -52
-          ? "medium"
-          : "low";
+    let noiseRisk: NoiseRisk = "low";
+    if (analysis.noiseFloorDb !== null) {
+      noiseRisk = measuredNoiseFloor > -50 ? "high" : measuredNoiseFloor > -58 ? "medium" : "low";
+    } else if (analysis.inputThresh !== null) {
+      // Only use loudnorm threshold when envelope analysis is unavailable.
+      noiseRisk = analysis.inputThresh > -33 ? "high" : analysis.inputThresh > -37 ? "medium" : "low";
+    }
 
     const inputTP = analysis.inputTP ?? -9;
     const hotPeakFactor = clamp((inputTP + 9) / 7, 0, 1);
@@ -852,20 +860,24 @@ export default function VoLeveler() {
   const buildAdaptiveNoiseReductionFilter = (noiseRisk: NoiseRisk, noiseFloorDb: number | null) => {
     if (noiseRisk === "low") return null;
 
-    const estimatedFloor = noiseFloorDb ?? (noiseRisk === "high" ? -45 : -50);
-    const sigmaDb = clamp(estimatedFloor + (noiseRisk === "high" ? 4.5 : 3.5), -52, -40);
-    const percent = noiseRisk === "high" ? 24 : 16;
-    const softness = noiseRisk === "high" ? 5.5 : 6.5;
-    const levels = noiseRisk === "high" ? 8 : 10;
+    const estimatedFloor = noiseFloorDb ?? (noiseRisk === "high" ? -49 : -55);
+    const sigmaDb = clamp(estimatedFloor + (noiseRisk === "high" ? 2.8 : 2.2), -56, -44);
+    const percent = noiseRisk === "high" ? 14 : 9;
+    const softness = noiseRisk === "high" ? 7.8 : 8.6;
+    const levels = noiseRisk === "high" ? 6 : 5;
+    const samples = noiseRisk === "high" ? 4096 : 2048;
 
     return `afwtdn=sigma=${sigmaDb.toFixed(
       1
-    )}dB:percent=${percent}:adaptive=1:samples=8192:softness=${softness.toFixed(
-      1
-    )}:levels=${levels}`;
+    )}dB:percent=${percent}:adaptive=1:samples=${samples}:softness=${softness.toFixed(1)}:levels=${levels}`;
   };
 
-  const buildMixFilter = (profile: AdaptiveProfile | null, options?: { disableRoomCleanup?: boolean }) => {
+  type MixRenderOptions = {
+    disableRoomCleanup?: boolean;
+    disableAdaptiveNoiseReduction?: boolean;
+  };
+
+  const buildMixFilter = (profile: AdaptiveProfile | null, options?: MixRenderOptions) => {
     const filters: string[] = [];
     const levelerSettings = LEVELER_PRESETS[leveler];
     const consistency = LEVELER_CONSISTENCY[leveler];
@@ -918,7 +930,9 @@ export default function VoLeveler() {
 
     const breath = BREATH_COMPAND[breathControl];
     const adaptiveNoiseReductionFilter =
-      noiseGuard && profile ? buildAdaptiveNoiseReductionFilter(profile.noiseRisk, profile.noiseFloorDb) : null;
+      !options?.disableAdaptiveNoiseReduction && noiseGuard && profile
+        ? buildAdaptiveNoiseReductionFilter(profile.noiseRisk, profile.noiseFloorDb)
+        : null;
     const useAdaptiveNoiseReduction = adaptiveNoiseReductionFilter !== null;
     const roomGateFilter =
       roomCleanupEnabled && (profile?.useTailGate ?? false)
@@ -1062,7 +1076,7 @@ export default function VoLeveler() {
     inputName: string,
     outputName: string,
     profile: AdaptiveProfile | null,
-    options?: { disableRoomCleanup?: boolean }
+    options?: MixRenderOptions
   ) => {
     const filterChain = buildMixFilter(profile, options);
     resetLogBuffer();
@@ -1279,6 +1293,10 @@ export default function VoLeveler() {
           } finally {
             await safeDeleteFile(ffmpeg, job.inputName);
           }
+
+          if (shouldRecycleFfmpegForBatch(i + 1, jobs.length)) {
+            ffmpeg = await refreshFfmpeg(`analysis memory guard (${i + 1}/${jobs.length})`);
+          }
         }
 
         if (smartMatchEnabled) {
@@ -1321,23 +1339,61 @@ export default function VoLeveler() {
             );
           }
 
-          const hasRoomFilters =
-            roomCleanup &&
-            !!profile &&
-            (profile.useTailGate || profile.echoNotchCutDb >= 0.25);
-          let usedRoomFallback = false;
+          const hasRoomFilters = roomCleanup && !!profile && (profile.useTailGate || profile.echoNotchCutDb >= 0.25);
+          const hasAdaptiveNoiseReduction = noiseGuard && !!profile && profile.noiseRisk !== "low";
 
           setStatus(`Mix-ready: ${job.base} (${i + 1}/${jobs.length})`);
-          try {
-            await runMixReady(ffmpeg, job.inputName, job.mixName, profile);
-          } catch (error) {
-            if (!hasRoomFilters) throw error;
-            appendLog(`[RoomCleanup] ${job.base}: room-filter render failed, retrying safe chain.`);
-            await runMixReady(ffmpeg, job.inputName, job.mixName, profile, { disableRoomCleanup: true });
-            usedRoomFallback = true;
+          const fallbackStrategies: Array<{ label: string; options?: MixRenderOptions }> = [
+            { label: "primary chain" },
+          ];
+          if (hasRoomFilters) {
+            fallbackStrategies.push({
+              label: "room cleanup bypass",
+              options: { disableRoomCleanup: true },
+            });
           }
-          if (usedRoomFallback) {
-            appendLog(`[RoomCleanup] ${job.base}: cleanup bypassed after retry safeguard.`);
+          if (hasAdaptiveNoiseReduction) {
+            fallbackStrategies.push({
+              label: "adaptive-NR bypass",
+              options: { disableAdaptiveNoiseReduction: true },
+            });
+          }
+          if (hasRoomFilters && hasAdaptiveNoiseReduction) {
+            fallbackStrategies.push({
+              label: "room cleanup + adaptive-NR bypass",
+              options: { disableRoomCleanup: true, disableAdaptiveNoiseReduction: true },
+            });
+          }
+
+          let mixRendered = false;
+          let fallbackApplied: string | null = null;
+          let lastMixError: unknown = null;
+
+          for (let strategyIndex = 0; strategyIndex < fallbackStrategies.length; strategyIndex += 1) {
+            const strategy = fallbackStrategies[strategyIndex];
+            try {
+              await runMixReady(ffmpeg, job.inputName, job.mixName, profile, strategy.options);
+              mixRendered = true;
+              fallbackApplied = strategyIndex === 0 ? null : strategy.label;
+              break;
+            } catch (error) {
+              lastMixError = error;
+              const hasMoreStrategies = strategyIndex < fallbackStrategies.length - 1;
+              if (hasMoreStrategies) {
+                appendLog(
+                  `[MixFallback] ${job.base}: ${strategy.label} failed, trying ${fallbackStrategies[
+                    strategyIndex + 1
+                  ]?.label}.`
+                );
+              }
+            }
+          }
+
+          if (!mixRendered) {
+            throw lastMixError ?? new Error("Mix-ready render failed.");
+          }
+          if (fallbackApplied) {
+            appendLog(`[MixFallback] ${job.base}: rendered with ${fallbackApplied}.`);
           }
 
           const mixOutput = await writeOutput(ffmpeg, job.mixName, "mixready", "clean");
@@ -1398,6 +1454,10 @@ export default function VoLeveler() {
           if (blendLoudName) {
             await safeDeleteFile(ffmpeg, blendLoudName);
           }
+        }
+
+        if (shouldRecycleFfmpegForBatch(i + 1, jobs.length)) {
+          ffmpeg = await refreshFfmpeg(`processing memory guard (${i + 1}/${jobs.length})`);
         }
       }
 
