@@ -810,11 +810,24 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
 
     const roomCleanupEnabled = roomCleanup && analysisConfidence >= 0.45;
     const useDenoise = false;
-    const useTailGate = roomCleanupEnabled && roomRisk === "high" && analysisConfidence >= 0.72;
+    const echoScore = analysis.echoScore ?? 0;
+    const useTailGate =
+      roomCleanupEnabled &&
+      analysisConfidence >= 0.62 &&
+      (roomRisk === "high" || (roomRisk === "medium" && echoScore >= 0.55));
     const denoiseStrength = 0;
-    const tailGateStrength = roomRisk === "high" ? 0.12 : 0;
+    const tailGateStrength = !useTailGate
+      ? 0
+      : roomRisk === "high"
+        ? clamp(0.16 + echoScore * 0.16, 0.16, 0.28)
+        : clamp(0.08 + echoScore * 0.1, 0.08, 0.16);
     const echoNotchCutDb = roomCleanupEnabled
-      ? clamp((analysis.echoScore ?? 0) * (roomRisk === "high" ? 0.55 : 0.35), 0, 0.6)
+      ? clamp(
+          echoScore * (roomRisk === "high" ? 0.9 : roomRisk === "medium" ? 0.6 : 0.4) +
+            (roomRisk === "high" ? 0.12 : 0),
+          0,
+          1.25
+        )
       : 0;
 
     const baseDynaTrim = noiseGuard ? (noiseRisk === "high" ? 3 : noiseRisk === "medium" ? 2 : 0) : 0;
@@ -862,10 +875,10 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
   const buildTailGateFilter = (strength: number) => {
     const thresholdDb = clamp(-56 + strength * 4, -56, -52);
     const threshold = fromDb(thresholdDb);
-    const ratio = clamp(1.03 + strength * 0.7, 1.03, 1.4);
-    const range = clamp(0.82 - strength * 0.16, 0.64, 0.82);
+    const ratio = clamp(1.02 + strength * 0.6, 1.02, 1.32);
+    const range = clamp(0.84 - strength * 0.14, 0.66, 0.84);
     const attack = Math.round(clamp(24 - strength * 6, 18, 26));
-    const release = Math.round(clamp(520 - strength * 120, 380, 520));
+    const release = Math.round(clamp(620 - strength * 140, 430, 620));
     const makeup = 1;
     return `agate=mode=downward:threshold=${threshold.toFixed(5)}:ratio=${ratio.toFixed(
       2
@@ -880,23 +893,16 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
     const estimatedFloor = noiseFloorDb ?? (noiseRisk === "high" ? -49 : -55);
     const severeNoise = noiseRisk === "high" && estimatedFloor > -46;
 
-    // WASM ffmpeg can become unstable with afwtdn on very noisy sources; use a
-    // conservative spectral NR in that specific case to keep NR active.
-    if (severeNoise) {
-      const nf = clamp(estimatedFloor + 3.5, -46, -34);
-      const nr = clamp(Math.round(8 + (estimatedFloor + 46) * 0.35), 8, 12);
-      return `afftdn=nf=${nf.toFixed(1)}:nr=${nr}:tn=1`;
-    }
-
-    const sigmaDb = clamp(estimatedFloor + (noiseRisk === "high" ? 2.8 : 2.2), -56, -44);
-    const percent = noiseRisk === "high" ? 14 : 9;
-    const softness = noiseRisk === "high" ? 7.8 : 8.6;
-    const levels = noiseRisk === "high" ? 6 : 5;
-    const samples = noiseRisk === "high" ? 4096 : 2048;
-
-    return `afwtdn=sigma=${sigmaDb.toFixed(
-      1
-    )}dB:percent=${percent}:adaptive=1:samples=${samples}:softness=${softness.toFixed(1)}:levels=${levels}`;
+    // Use spectral denoise in-browser for stability and voice-preserving behavior.
+    const nf = severeNoise
+      ? clamp(estimatedFloor + 3.2, -46, -34)
+      : noiseRisk === "high"
+        ? clamp(estimatedFloor + 4.5, -50, -37)
+        : clamp(estimatedFloor + 5.2, -56, -40);
+    const nr = severeNoise ? 12 : noiseRisk === "high" ? 10 : 7;
+    const ad = severeNoise ? 0.55 : noiseRisk === "high" ? 0.42 : 0.32;
+    const gs = severeNoise ? 12 : noiseRisk === "high" ? 10 : 8;
+    return `afftdn=nf=${nf.toFixed(1)}:nr=${nr}:tn=1:ad=${ad.toFixed(2)}:gs=${gs}`;
   };
 
   type MixRenderOptions = {
@@ -922,12 +928,21 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
     const dyn = levelerSettings.dyna;
     const minimalStabilityChain = options?.minimalStabilityChain === true;
     const roomCleanupEnabled = roomCleanup && !options?.disableRoomCleanup && !minimalStabilityChain;
+    const adaptiveNoiseReductionFilter = resolveAdaptiveNoiseReductionFilter(profile, options);
+    const useAdaptiveNoiseReduction = adaptiveNoiseReductionFilter !== null;
 
     if (eqCleanup) {
       const highpassHz = profile?.highpassHz ?? 80;
       const lowMidGainDb = profile?.lowMidGainDb ?? -2;
       filters.push(`highpass=f=${highpassHz}`);
       filters.push(`equalizer=f=250:width_type=q:width=1.0:g=${lowMidGainDb.toFixed(2)}`);
+      if (useAdaptiveNoiseReduction && adaptiveNoiseReductionFilter) {
+        // Run denoise before dynamic stages so levelers do not lift room bed/hiss.
+        filters.push(adaptiveNoiseReductionFilter);
+      }
+    }
+    if (!eqCleanup && useAdaptiveNoiseReduction && adaptiveNoiseReductionFilter) {
+      filters.push(adaptiveNoiseReductionFilter);
     }
 
     if (dyn) {
@@ -975,8 +990,6 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
     }
 
     const breath = BREATH_COMPAND[breathControl];
-    const adaptiveNoiseReductionFilter = resolveAdaptiveNoiseReductionFilter(profile, options);
-    const useAdaptiveNoiseReduction = adaptiveNoiseReductionFilter !== null;
     const roomGateFilter =
       roomCleanupEnabled && (profile?.useTailGate ?? false)
         ? buildTailGateFilter(profile?.tailGateStrength ?? 0.12)
@@ -1022,8 +1035,17 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
       filters.push(`equalizer=f=11200:width_type=q:width=0.7:g=${topShelfCut.toFixed(2)}`);
     }
     if (!minimalStabilityChain && roomCleanupEnabled && (profile?.echoNotchCutDb ?? 0) >= 0.25) {
-      const echoNotchGain = -clamp(profile?.echoNotchCutDb ?? 0, 0.25, 0.6);
-      filters.push(`equalizer=f=2450:width_type=q:width=1.4:g=${echoNotchGain.toFixed(2)}`);
+      const echoCut = clamp(profile?.echoNotchCutDb ?? 0, 0.25, 1.25);
+      const notch1 = -clamp(echoCut, 0.25, 1.25);
+      filters.push(`equalizer=f=2450:width_type=q:width=1.35:g=${notch1.toFixed(2)}`);
+      if (echoCut >= 0.55) {
+        const notch2 = -clamp(echoCut * 0.62, 0.3, 0.9);
+        filters.push(`equalizer=f=1280:width_type=q:width=1.0:g=${notch2.toFixed(2)}`);
+      }
+      if (echoCut >= 0.9) {
+        const notch3 = -clamp(echoCut * 0.45, 0.25, 0.7);
+        filters.push(`equalizer=f=3620:width_type=q:width=1.6:g=${notch3.toFixed(2)}`);
+      }
     }
 
     const thresholdBase = parseFloat(levelerSettings.compressor.threshold.replace("dB", ""));
@@ -1047,6 +1069,16 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
       thresholdAdjust += 0.22;
       ratioAdjust -= 0.08;
     }
+    if (profile?.roomRisk === "high") {
+      thresholdAdjust += 0.6;
+      ratioAdjust -= 0.24;
+    } else if (profile?.roomRisk === "medium") {
+      thresholdAdjust += 0.32;
+      ratioAdjust -= 0.13;
+    }
+    const echoPressure = clamp((profile?.echoNotchCutDb ?? 0) / 1.25, 0, 1);
+    thresholdAdjust += echoPressure * 0.25;
+    ratioAdjust -= echoPressure * 0.12;
 
     // Smarter consistency: tighten when needed, but protect emotional peaks.
     const thresholdTighten = consistency * (0.55 + levelingNeed * 0.75);
@@ -1060,16 +1092,22 @@ const describeError = (error: unknown) => (error instanceof Error ? error.messag
       1.55,
       3.0
     );
-    const attack = Math.round(clamp(24 - consistency * 8 + emotionProtection * 8, 14, 30));
-    const release = Math.round(clamp(170 - consistency * 45 + emotionProtection * 75, 95, 235));
-    const compMix = clamp(0.9 + levelingNeed * 0.07 - emotionProtection * 0.24, 0.7, 0.95);
+    const roomRelax = profile?.roomRisk === "high" ? 1 : profile?.roomRisk === "medium" ? 0.45 : 0;
+    const attack = Math.round(
+      clamp(24 - consistency * 8 + emotionProtection * 8 + roomRelax * 4 + echoPressure * 2, 14, 34)
+    );
+    const release = Math.round(
+      clamp(170 - consistency * 45 + emotionProtection * 75 + roomRelax * 40 + echoPressure * 30, 95, 280)
+    );
+    const compMix = clamp(
+      0.9 + levelingNeed * 0.07 - emotionProtection * 0.24 - roomRelax * 0.08 - echoPressure * 0.04,
+      0.62,
+      0.95
+    );
 
     filters.push(
       `acompressor=threshold=${threshold.toFixed(1)}dB:ratio=${ratio.toFixed(2)}:attack=${attack}:release=${release}:mix=${compMix.toFixed(2)}:detection=rms`
     );
-    if (useAdaptiveNoiseReduction && adaptiveNoiseReductionFilter) {
-      filters.push(adaptiveNoiseReductionFilter);
-    }
     if (!options?.disableLimiter) {
       filters.push(LIMITER_FILTER);
     }
