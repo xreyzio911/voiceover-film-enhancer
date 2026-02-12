@@ -1,0 +1,62 @@
+{
+  "generatedAt": "2026-02-12T14:10:52.045Z",
+  "status": "Done with warnings",
+  "reports": [
+    {
+      "fileName": "Eleonora_1-10_blend_A85.wav",
+      "fileSize": 255910386,
+      "status": "warning",
+      "overallRisk": 0.4629360085853336,
+      "durationSec": 1332.866,
+      "sampleRate": 48000,
+      "peakDb": -3.264393092420163,
+      "clipPct": 0,
+      "noiseFloorDb": -110,
+      "pauseNoiseFloorDb": -110,
+      "noiseContrastDb": 80,
+      "speechRatioPct": 10.32366490103987,
+      "dynamicRangeDb": 29.97053100544361,
+      "instabilityScore": 0.7361019328804195,
+      "compressionScore": 0.19550230046129208,
+      "clickScore": 1,
+      "echoScore": 0.8279249381943571,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Click/transient artifacts detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Use instability-safe leveling (slower gain riding, less compression mix).",
+        "Run click-taming cleanup and recheck consonant spikes.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    },
+    {
+      "fileName": "Viviana_1-10_blend_A85.wav",
+      "fileSize": 254412786,
+      "status": "warning",
+      "overallRisk": 0.3629900469709708,
+      "durationSec": 1325.066,
+      "sampleRate": 48000,
+      "peakDb": -2.000307881334134,
+      "clipPct": 0,
+      "noiseFloorDb": -110,
+      "pauseNoiseFloorDb": -110,
+      "noiseContrastDb": 72.31802280228821,
+      "speechRatioPct": 31.442349780387303,
+      "dynamicRangeDb": 32.67809744123737,
+      "instabilityScore": 0.30897682248819425,
+      "compressionScore": 0.16499754656089738,
+      "clickScore": 1,
+      "echoScore": 0.9103016533265733,
+      "flags": [
+        "Click/transient artifacts detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Run click-taming cleanup and recheck consonant spikes.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    }
+  ]
+}

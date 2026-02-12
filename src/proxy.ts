@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "next-auth/middleware";
 import { isAllowedEmail } from "@/lib/authAllowlist";
+import { isLocalHost } from "@/lib/isLocalHost";
 
 const LOGIN_PATH = "/login";
+const QC_LAB_PATH = "/qc-lab";
 
 export default withAuth(
   (request) => {
@@ -19,6 +21,10 @@ export default withAuth(
         return NextResponse.redirect(new URL("/", nextUrl));
       }
       return NextResponse.next();
+    }
+
+    if (path.startsWith(QC_LAB_PATH) && !isLocalHost(nextUrl.hostname)) {
+      return NextResponse.redirect(new URL("/", nextUrl));
     }
 
     if (!allowed) {

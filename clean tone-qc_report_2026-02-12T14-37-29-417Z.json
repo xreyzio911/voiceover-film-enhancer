@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-02-12T14:37:29.417Z",
+  "status": "Done with warnings",
+  "reports": [
+    {
+      "fileName": "1-10_Alessio_Moretti_blend_A85.wav",
+      "fileSize": 255915250,
+      "status": "warning",
+      "overallRisk": 0.43335950456051836,
+      "durationSec": 1332.8913333333333,
+      "sampleRate": 48000,
+      "peakDb": -2.928342041983372,
+      "clipPct": 0,
+      "noiseFloorDb": -110,
+      "pauseNoiseFloorDb": -110,
+      "noiseContrastDb": 80,
+      "speechRatioPct": 7.292424731223132,
+      "dynamicRangeDb": 25.961166985257236,
+      "instabilityScore": 0.6454776599149896,
+      "compressionScore": 0.18596180693425537,
+      "clickScore": 1,
+      "echoScore": 0.7817836043058298,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Click/transient artifacts detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Use instability-safe leveling (slower gain riding, less compression mix).",
+        "Run click-taming cleanup and recheck consonant spikes.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    }
+  ]
+}

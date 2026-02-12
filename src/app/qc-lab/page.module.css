@@ -1,0 +1,98 @@
+.page {
+  min-height: 100vh;
+  padding: 42px 24px 64px;
+  display: flex;
+  justify-content: center;
+}
+
+.shell {
+  width: min(1120px, 100%);
+  display: grid;
+  gap: 16px;
+}
+
+.hero {
+  display: grid;
+  gap: 10px;
+}
+
+.heroTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.accountRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.account {
+  font-size: 0.85rem;
+  color: var(--muted);
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.localBadge {
+  border: 1px solid rgba(110, 214, 198, 0.45);
+  border-radius: 999px;
+  background: rgba(110, 214, 198, 0.12);
+  font-size: 0.75rem;
+  color: var(--text);
+  padding: 5px 9px;
+}
+
+.navActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.backLink {
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 0.84rem;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.logoutButton {
+  border: 1px solid var(--stroke);
+  background: transparent;
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 13px;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.title {
+  font-size: clamp(1.8rem, 2.6vw, 2.7rem);
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.subtitle {
+  color: var(--muted);
+  max-width: 700px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .heroTop {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .navActions {
+    width: 100%;
+  }
+}
+

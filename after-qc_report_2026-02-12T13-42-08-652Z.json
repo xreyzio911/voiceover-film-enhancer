@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2026-02-12T13:42:08.652Z",
+  "status": "Done",
+  "reports": [
+    {
+      "fileName": "Eleonora_1-10_blend_A85.wav",
+      "fileSize": 255910386,
+      "status": "ok",
+      "overallRisk": 0.3884207791267328,
+      "durationSec": 1332.866,
+      "sampleRate": 48000,
+      "peakDb": -3.9355871327707708,
+      "clipPct": 0,
+      "noiseFloorDb": -95,
+      "speechRatioPct": 10.463964707471153,
+      "dynamicRangeDb": 29.501269542357015,
+      "instabilityScore": 0.9292041405122105,
+      "compressionScore": 0.19511542747315852,
+      "clickScore": 0,
+      "echoScore": 1,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Prefer Balanced leveling; avoid aggressive firmness on this actor.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    },
+    {
+      "fileName": "Viviana_1-10_blend_A85.wav",
+      "fileSize": 254412786,
+      "status": "ok",
+      "overallRisk": 0.2858872977305076,
+      "durationSec": 1325.066,
+      "sampleRate": 48000,
+      "peakDb": -2.318834016390779,
+      "clipPct": 0,
+      "noiseFloorDb": -95,
+      "speechRatioPct": 33.280002414984985,
+      "dynamicRangeDb": 32.76127472463991,
+      "instabilityScore": 0.5588421566046676,
+      "compressionScore": 0.16911807088872502,
+      "clickScore": 0,
+      "echoScore": 1,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Prefer Balanced leveling; avoid aggressive firmness on this actor.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    }
+  ]
+}

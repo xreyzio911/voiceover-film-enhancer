@@ -178,6 +178,7 @@ type FileAnalysis = {
   midRms: number | null;
   highRms: number | null;
   noiseFloorDb: number | null;
+  nearSpeechNoiseFloorDb: number | null;
   speechThresholdDb: number | null;
   reverbScore: number | null;
   echoScore: number | null;
@@ -185,6 +186,8 @@ type FileAnalysis = {
   echoDelayMs: number | null;
   analysisConfidence: number | null;
   drynessScore: number | null;
+  instabilityScore: number | null;
+  clickScore: number | null;
 };
 
 type BatchReference = {
@@ -211,12 +214,16 @@ type AdaptiveProfile = {
   floorGuardFilter: string;
   noiseRisk: NoiseRisk;
   noiseFloorDb: number | null;
+  speechThresholdDb: number | null;
   roomRisk: RoomRisk;
   useDenoise: boolean;
   denoiseStrength: number;
   useTailGate: boolean;
   tailGateStrength: number;
   echoNotchCutDb: number;
+  instabilityScore: number;
+  clickScore: number;
+  clickTameStrength: number;
   blendIndoorGain: number;
   blendOutdoorGain: number;
   blendIndoorDelayMs: number;
@@ -246,6 +253,7 @@ const createEmptyAnalysis = (): FileAnalysis => ({
   midRms: null,
   highRms: null,
   noiseFloorDb: null,
+  nearSpeechNoiseFloorDb: null,
   speechThresholdDb: null,
   reverbScore: null,
   echoScore: null,
@@ -253,6 +261,8 @@ const createEmptyAnalysis = (): FileAnalysis => ({
   echoDelayMs: null,
   analysisConfidence: null,
   drynessScore: null,
+  instabilityScore: null,
+  clickScore: null,
 });
 
 export default function VoLeveler() {
@@ -494,6 +504,7 @@ const summarizeFailureReason = (error: unknown) => {
     if (frameCount < 20) {
       return {
         noiseFloorDb: null,
+        nearSpeechNoiseFloorDb: null,
         speechThresholdDb: null,
         reverbScore: null,
         echoScore: null,
@@ -501,26 +512,62 @@ const summarizeFailureReason = (error: unknown) => {
         echoDelayMs: null,
         analysisConfidence: null,
         drynessScore: null,
+        instabilityScore: null,
+        clickScore: null,
       };
     }
 
     const frameRms = new Array<number>(frameCount);
     const frameDb = new Array<number>(frameCount);
+    const framePeak = new Array<number>(frameCount);
     for (let i = 0; i < frameCount; i += 1) {
       let sumSquares = 0;
+      let peakAbs = 0;
       const frameStart = i * frameSize;
       for (let j = 0; j < frameSize; j += 1) {
         const value = samples[frameStart + j] ?? 0;
+        const absValue = Math.abs(value);
+        if (absValue > peakAbs) peakAbs = absValue;
         sumSquares += value * value;
       }
       const rms = Math.sqrt(sumSquares / frameSize);
       frameRms[i] = rms;
       frameDb[i] = Math.max(ENVELOPE_FLOOR_DB, toDb(rms + 1e-12));
+      framePeak[i] = peakAbs;
     }
 
-    const noiseFloorDb = clamp(percentile(frameDb, 20) ?? -68, -90, -28);
-    const speechThresholdDb = clamp(noiseFloorDb + 12, -58, -26);
-    const speechMask = frameDb.map((db) => db > speechThresholdDb);
+    const initialNoiseFloorDb = clamp(percentile(frameDb, 20) ?? -68, -90, -28);
+    const initialSpeechThresholdDb = clamp(initialNoiseFloorDb + 12, -58, -26);
+    const speechMask = frameDb.map((db) => db > initialSpeechThresholdDb);
+    const speechDbSeries: number[] = [];
+    const nearSpeechNoiseDb: number[] = [];
+    const nonSpeechDb: number[] = [];
+    const speechContextFrames = Math.round(0.35 / (ENVELOPE_FRAME_MS / 1000));
+    for (let i = 0; i < frameCount; i += 1) {
+      if (speechMask[i]) {
+        speechDbSeries.push(frameDb[i]);
+        continue;
+      }
+      nonSpeechDb.push(frameDb[i]);
+      const from = Math.max(0, i - speechContextFrames);
+      const to = Math.min(frameCount - 1, i + speechContextFrames);
+      for (let j = from; j <= to; j += 1) {
+        if (speechMask[j]) {
+          nearSpeechNoiseDb.push(frameDb[i]);
+          break;
+        }
+      }
+    }
+
+    const nearSpeechNoiseFloorDb =
+      nearSpeechNoiseDb.length > 0 ? clamp(percentile(nearSpeechNoiseDb, 72) ?? -90, -90, -28) : null;
+    const nonSpeechFloorDb = clamp(percentile(nonSpeechDb, 65) ?? initialNoiseFloorDb, -90, -28);
+    const noiseFloorDb = clamp(
+      Math.max(initialNoiseFloorDb, nonSpeechFloorDb, nearSpeechNoiseFloorDb ?? ENVELOPE_FLOOR_DB),
+      -90,
+      -28
+    );
+    const speechThresholdDb = clamp(noiseFloorDb + 10.5, -58, -26);
 
     const meanSlice = (values: number[], start: number, end: number) => {
       const safeStart = Math.max(0, start);
@@ -605,8 +652,43 @@ const summarizeFailureReason = (error: unknown) => {
     const analysisConfidence = clamp(eventCoverage * 0.65 + speechCoverage * 0.35, 0, 1);
     const drynessScore = clamp(1 - roomScore - noiseIndicator * 0.15, 0, 1);
 
+    let instabilityScore = 0;
+    if (speechDbSeries.length >= 12) {
+      const jumpDeltas: number[] = [];
+      for (let i = 1; i < speechDbSeries.length; i += 1) {
+        jumpDeltas.push(Math.abs(speechDbSeries[i] - speechDbSeries[i - 1]));
+      }
+      const jumpP85 = percentile(jumpDeltas, 85) ?? 0;
+      const jumpP95 = percentile(jumpDeltas, 95) ?? 0;
+      instabilityScore = clamp(
+        clamp((jumpP85 - 1.7) / 3.8, 0, 1) * 0.65 + clamp((jumpP95 - 2.7) / 5.4, 0, 1) * 0.35,
+        0,
+        1
+      );
+      instabilityScore = clamp(instabilityScore * clamp(0.8 + speechCoverage * 0.2, 0.8, 1), 0, 1);
+    }
+
+    let nonSpeechFrames = 0;
+    let clickFrames = 0;
+    for (let i = 0; i < frameCount; i += 1) {
+      const crestDb = toDb((framePeak[i] + 1e-9) / (frameRms[i] + 1e-9));
+      const peakDb = Math.max(ENVELOPE_FLOOR_DB, toDb(framePeak[i] + 1e-12));
+      if (!speechMask[i]) {
+        nonSpeechFrames += 1;
+        if (crestDb > 20 && peakDb > -20) {
+          clickFrames += 1;
+        }
+      } else if (crestDb > 25 && peakDb > -13) {
+        // Catch harsh transients that ride on speech, but keep weighting lower.
+        clickFrames += 0.5;
+      }
+    }
+    const clickDensity = clickFrames / Math.max(nonSpeechFrames, 1);
+    const clickScore = clamp(clickDensity * 3.2, 0, 1);
+
     return {
       noiseFloorDb,
+      nearSpeechNoiseFloorDb,
       speechThresholdDb,
       reverbScore,
       echoScore,
@@ -614,6 +696,8 @@ const summarizeFailureReason = (error: unknown) => {
       echoDelayMs: bestEchoLagFrames > 0 ? bestEchoLagFrames * ENVELOPE_FRAME_MS : null,
       analysisConfidence,
       drynessScore,
+      instabilityScore,
+      clickScore,
     };
   };
 
@@ -691,6 +775,7 @@ const summarizeFailureReason = (error: unknown) => {
     try {
       const envelope = await runEnvelopeAnalysis(ffmpeg, inputName);
       analysis.noiseFloorDb = envelope.noiseFloorDb;
+      analysis.nearSpeechNoiseFloorDb = envelope.nearSpeechNoiseFloorDb;
       analysis.speechThresholdDb = envelope.speechThresholdDb;
       analysis.reverbScore = envelope.reverbScore;
       analysis.echoScore = envelope.echoScore;
@@ -698,6 +783,8 @@ const summarizeFailureReason = (error: unknown) => {
       analysis.echoDelayMs = envelope.echoDelayMs;
       analysis.analysisConfidence = envelope.analysisConfidence;
       analysis.drynessScore = envelope.drynessScore;
+      analysis.instabilityScore = envelope.instabilityScore;
+      analysis.clickScore = envelope.clickScore;
     } catch (error) {
       appendLog(
         `[Analysis] Envelope fallback (${inputName}): ${
@@ -776,13 +863,21 @@ const summarizeFailureReason = (error: unknown) => {
     const compressorRatioOffset = clamp(lraDiff * 0.07 * dynamicsFactor, -0.35, 0.45);
     const compressorThresholdOffsetDb = clamp(lraDiff * 0.6 * dynamicsFactor, -1.5, 1.5);
 
-    const measuredNoiseFloor = analysis.noiseFloorDb ?? -70;
+    const measuredNoiseFloor = Math.max(analysis.noiseFloorDb ?? -70, analysis.nearSpeechNoiseFloorDb ?? -90);
+    const measuredSpeechThreshold =
+      analysis.speechThresholdDb ?? clamp(measuredNoiseFloor + 10.5, -58, -26);
     let noiseRisk: NoiseRisk = "low";
-    if (analysis.noiseFloorDb !== null) {
-      noiseRisk = measuredNoiseFloor > -50 ? "high" : measuredNoiseFloor > -58 ? "medium" : "low";
+    if (analysis.noiseFloorDb !== null || analysis.nearSpeechNoiseFloorDb !== null) {
+      noiseRisk = measuredNoiseFloor > -52 ? "high" : measuredNoiseFloor > -62 ? "medium" : "low";
     } else if (analysis.inputThresh !== null) {
       // Only use loudnorm threshold when envelope analysis is unavailable.
-      noiseRisk = analysis.inputThresh > -33 ? "high" : analysis.inputThresh > -37 ? "medium" : "low";
+      noiseRisk = analysis.inputThresh > -33 ? "high" : analysis.inputThresh > -38 ? "medium" : "low";
+    }
+    if (noiseRisk === "low" && measuredSpeechThreshold > -44) {
+      noiseRisk = "medium";
+    }
+    if (noiseRisk === "medium" && measuredSpeechThreshold > -40) {
+      noiseRisk = "high";
     }
 
     const inputTP = analysis.inputTP ?? -9;
@@ -821,37 +916,59 @@ const summarizeFailureReason = (error: unknown) => {
       if (airGainDb > 0) airGainDb *= positiveTrim;
     }
 
-    const roomCleanupEnabled = roomCleanup && analysisConfidence >= 0.45;
-    const useDenoise = false;
     const echoScore = analysis.echoScore ?? 0;
+    const roomCleanupEnabled =
+      roomCleanup && (analysisConfidence >= 0.4 || echoScore >= 0.58 || roomRisk !== "low");
+    const useDenoise = false;
+    const instabilityScore = clamp(analysis.instabilityScore ?? 0, 0, 1);
+    const clickScore = clamp(analysis.clickScore ?? 0, 0, 1);
+    const preserveSentenceEndings = noiseRisk === "low" && instabilityScore >= 0.62 && echoScore < 0.92;
+    const forceTailGateForEcho =
+      roomCleanupEnabled && roomRisk === "high" && echoScore >= 0.62 && !preserveSentenceEndings;
     const useTailGate =
       roomCleanupEnabled &&
-      analysisConfidence >= 0.62 &&
-      (roomRisk === "high" || (roomRisk === "medium" && echoScore >= 0.55));
+      !preserveSentenceEndings &&
+      (forceTailGateForEcho ||
+        (analysisConfidence >= 0.52 && (roomRisk === "high" || (roomRisk === "medium" && echoScore >= 0.5))));
     const denoiseStrength = 0;
     const tailGateStrength = !useTailGate
       ? 0
       : roomRisk === "high"
-        ? clamp(0.16 + echoScore * 0.16, 0.16, 0.28)
-        : clamp(0.08 + echoScore * 0.1, 0.08, 0.16);
+        ? clamp(0.09 + echoScore * 0.1 + analysisConfidence * 0.06, 0.09, 0.22)
+        : clamp(0.06 + echoScore * 0.08, 0.06, 0.14);
     const echoNotchCutDb = roomCleanupEnabled
       ? clamp(
-          echoScore * (roomRisk === "high" ? 0.9 : roomRisk === "medium" ? 0.6 : 0.4) +
+          echoScore * (roomRisk === "high" ? 1.02 : roomRisk === "medium" ? 0.68 : 0.42) +
             (roomRisk === "high" ? 0.12 : 0),
           0,
-          1.25
+          1.45
         )
       : 0;
 
     const baseDynaTrim = noiseGuard ? (noiseRisk === "high" ? 3 : noiseRisk === "medium" ? 2 : 0) : 0;
     const roomDynaTrim = roomRisk === "high" ? 1.4 : roomRisk === "medium" ? 0.7 : 0;
-    const dynaTrim = baseDynaTrim + roomDynaTrim;
+    const instabilityAssist =
+      instabilityScore * (noiseRisk === "low" ? 0.9 : noiseRisk === "medium" ? 0.4 : 0.15);
+    const dynaTrim = Math.max(0, baseDynaTrim + roomDynaTrim - instabilityAssist);
+    const clickTameStrength = clamp(
+      clickScore * (noiseRisk === "high" ? 1 : noiseRisk === "medium" ? 0.88 : 0.78) * 0.72,
+      0,
+      1
+    );
 
     const dryness = analysis.drynessScore ?? clamp(1 - confidenceScaledRoom, 0, 1);
-    const blendRiskDamp = roomRisk === "high" ? 0.08 : roomRisk === "medium" ? 0.28 : 1;
+    const blendRiskDamp = roomRisk === "high" ? 0.03 : roomRisk === "medium" ? 0.2 : 1;
+    const blendEchoDamp = clamp(1 - echoScore * 0.85, 0.08, 1);
+    const blendNoiseDamp = noiseRisk === "high" ? 0.22 : noiseRisk === "medium" ? 0.55 : 1;
+    const blendInstabilityDamp = instabilityScore >= 0.7 ? 0.65 : 1;
     const blendConfidenceScale = clamp(0.35 + analysisConfidence * 0.65, 0.35, 1);
-    const blendBase = clamp(0.025 + dryness * 0.03, 0.02, 0.055);
-    const blendAmount = sceneBlend ? blendBase * blendRiskDamp * blendConfidenceScale : 0;
+    const blendBase = clamp(0.022 + dryness * 0.022, 0.016, 0.045);
+    let blendAmount = sceneBlend
+      ? blendBase * blendRiskDamp * blendConfidenceScale * blendEchoDamp * blendNoiseDamp * blendInstabilityDamp
+      : 0;
+    if (roomRisk === "high" || echoScore >= 0.72) {
+      blendAmount = Math.min(blendAmount, 0.0018);
+    }
     const blendIndoorGain = clamp(blendAmount * 0.62, 0, 0.07);
     const blendOutdoorGain = clamp(blendAmount * 0.42, 0, 0.055);
     const blendIndoorDelayMs = Math.round(clamp(24 + (1 - dryness) * 8, 22, 36));
@@ -871,13 +988,17 @@ const summarizeFailureReason = (error: unknown) => {
       dynaTrim,
       floorGuardFilter: noiseRisk === "high" ? FLOOR_GUARD_STRONG : FLOOR_GUARD,
       noiseRisk,
-      noiseFloorDb: analysis.noiseFloorDb,
+      noiseFloorDb: measuredNoiseFloor,
+      speechThresholdDb: measuredSpeechThreshold,
       roomRisk,
       useDenoise,
       denoiseStrength,
       useTailGate,
       tailGateStrength,
       echoNotchCutDb,
+      instabilityScore,
+      clickScore,
+      clickTameStrength,
       blendIndoorGain,
       blendOutdoorGain,
       blendIndoorDelayMs,
@@ -886,18 +1007,27 @@ const summarizeFailureReason = (error: unknown) => {
   };
 
   const buildTailGateFilter = (strength: number) => {
-    const thresholdDb = clamp(-56 + strength * 4, -56, -52);
+    const thresholdDb = clamp(-58 + strength * 3.4, -58, -54.5);
     const threshold = fromDb(thresholdDb);
-    const ratio = clamp(1.02 + strength * 0.6, 1.02, 1.32);
-    const range = clamp(0.84 - strength * 0.14, 0.66, 0.84);
+    const ratio = clamp(1.01 + strength * 0.5, 1.01, 1.22);
+    const range = clamp(0.9 - strength * 0.16, 0.72, 0.9);
     const attack = Math.round(clamp(24 - strength * 6, 18, 26));
-    const release = Math.round(clamp(620 - strength * 140, 430, 620));
+    const release = Math.round(clamp(760 - strength * 160, 520, 760));
     const makeup = 1;
     return `agate=mode=downward:threshold=${threshold.toFixed(5)}:ratio=${ratio.toFixed(
       2
     )}:range=${range.toFixed(3)}:attack=${attack}:release=${release}:makeup=${makeup.toFixed(
       2
     )}:detection=rms:link=average`;
+  };
+
+  const buildClickTamerFilter = (strength: number) => {
+    const attack = Math.round(clamp(2 + strength * 4, 2, 6));
+    const release = Math.round(clamp(20 + strength * 30, 20, 52));
+    const limit = clamp(-3.6 + strength * 0.7, -3.6, -2.8);
+    return `alimiter=limit=${limit.toFixed(
+      1
+    )}dB:attack=${attack}:release=${release}:level=disabled`;
   };
 
   const buildAdaptiveNoiseReductionFilter = (noiseRisk: NoiseRisk, noiseFloorDb: number | null) => {
@@ -943,6 +1073,9 @@ const summarizeFailureReason = (error: unknown) => {
     const roomCleanupEnabled = roomCleanup && !options?.disableRoomCleanup && !minimalStabilityChain;
     const adaptiveNoiseReductionFilter = resolveAdaptiveNoiseReductionFilter(profile, options);
     const useAdaptiveNoiseReduction = adaptiveNoiseReductionFilter !== null;
+    const instabilityScore = profile?.instabilityScore ?? 0;
+    const clickTameStrength = profile?.clickTameStrength ?? 0;
+    const useClickTamer = !minimalStabilityChain && clickTameStrength >= 0.46;
 
     if (eqCleanup) {
       const highpassHz = profile?.highpassHz ?? 80;
@@ -956,6 +1089,9 @@ const summarizeFailureReason = (error: unknown) => {
     }
     if (!eqCleanup && useAdaptiveNoiseReduction && adaptiveNoiseReductionFilter) {
       filters.push(adaptiveNoiseReductionFilter);
+    }
+    if (useClickTamer) {
+      filters.push(buildClickTamerFilter(clickTameStrength));
     }
 
     if (dyn) {
@@ -971,20 +1107,47 @@ const summarizeFailureReason = (error: unknown) => {
           dynaG = Math.max(3, dynaG + adaptiveLift - profile.dynaTrim - emotionRelax);
           dynaM = Math.max(3, dynaM + adaptiveLift - profile.dynaTrim - emotionRelax);
 
+          if (profile.instabilityScore >= 0.35) {
+            if (profile.noiseRisk === "low") {
+              // Unstable but clean takes need faster ride response, not a wider/slow window.
+              const instabilityNorm = clamp((profile.instabilityScore - 0.35) / 0.65, 0, 1);
+              dynaF = Math.round(clamp(dynaF - instabilityNorm * 80, 161, 261));
+              dynaG += profile.instabilityScore * 1.8;
+              dynaM += profile.instabilityScore * 1.4;
+              if (noiseGuard && profile.noiseRisk !== "low") {
+                const gateDb = clamp((profile.speechThresholdDb ?? -46) - 8.5, -58, -44);
+                dynaThresholdAmp = Math.max(dynaThresholdAmp, fromDb(gateDb));
+              }
+            } else {
+              dynaF = Math.max(dynaF, Math.round(261 + profile.instabilityScore * 90));
+            }
+          }
+
           // Noisy takes need slower and lower lift to avoid raising room noise in pauses.
           if (noiseGuard) {
             if (profile.noiseRisk === "high" || (profile.noiseFloorDb ?? -70) > -46) {
-              dynaF = Math.max(dynaF, 321);
+              dynaF = Math.max(dynaF, 281);
               dynaG = Math.min(dynaG, 3);
               dynaM = Math.min(dynaM, 3);
-              const gateDb = clamp((profile.noiseFloorDb ?? -46) + 5.8, -56, -38);
+              const gateDb = clamp((profile.noiseFloorDb ?? -46) + 7.2, -54, -34);
               dynaThresholdAmp = fromDb(gateDb);
             } else if (profile.noiseRisk === "medium" || (profile.noiseFloorDb ?? -70) > -52) {
-              dynaF = Math.max(dynaF, 341);
+              dynaF = Math.max(dynaF, 241);
               dynaG = Math.min(dynaG, 4);
               dynaM = Math.min(dynaM, 5);
-              const gateDb = clamp((profile.noiseFloorDb ?? -50) + 4.6, -58, -40);
+              const gateDb = clamp((profile.noiseFloorDb ?? -50) + 6.0, -56, -36);
               dynaThresholdAmp = fromDb(gateDb);
+            }
+          }
+
+          if (profile.instabilityScore >= 0.62 && profile.noiseRisk !== "high") {
+            const instabilityNorm = clamp((profile.instabilityScore - 0.62) / 0.38, 0, 1);
+            dynaF = Math.round(clamp(dynaF - instabilityNorm * 48, 201, 261));
+            dynaG = Math.min(7.5, dynaG + instabilityNorm * 1.2);
+            dynaM = Math.min(9.5, dynaM + instabilityNorm * 1.0);
+            if (noiseGuard && profile.noiseRisk !== "low") {
+              const speechGateDb = clamp((profile.speechThresholdDb ?? -46) - 8.2, -58, -43);
+              dynaThresholdAmp = Math.max(dynaThresholdAmp, fromDb(speechGateDb));
             }
           }
         }
@@ -1060,6 +1223,17 @@ const summarizeFailureReason = (error: unknown) => {
         filters.push(`equalizer=f=3620:width_type=q:width=1.6:g=${notch3.toFixed(2)}`);
       }
     }
+    if (!minimalStabilityChain && roomCleanupEnabled && profile?.roomRisk === "high") {
+      const roomCutFactor = clamp((profile?.echoNotchCutDb ?? 0.6) / 1.45, 0.25, 1);
+      const roomCutLow = -clamp(0.45 + roomCutFactor * 0.55, 0.45, 1.05);
+      const roomCutMid = -clamp(0.35 + roomCutFactor * 0.65, 0.35, 1.15);
+      filters.push(`equalizer=f=460:width_type=q:width=0.95:g=${roomCutLow.toFixed(2)}`);
+      filters.push(`equalizer=f=1650:width_type=q:width=1.2:g=${roomCutMid.toFixed(2)}`);
+      if ((profile?.echoNotchCutDb ?? 0) >= 0.95) {
+        const roomCutUpperMid = -clamp(0.25 + roomCutFactor * 0.45, 0.25, 0.8);
+        filters.push(`equalizer=f=2850:width_type=q:width=1.5:g=${roomCutUpperMid.toFixed(2)}`);
+      }
+    }
 
     const thresholdBase = parseFloat(levelerSettings.compressor.threshold.replace("dB", ""));
     const ratioBase = parseFloat(levelerSettings.compressor.ratio);
@@ -1092,6 +1266,10 @@ const summarizeFailureReason = (error: unknown) => {
     const echoPressure = clamp((profile?.echoNotchCutDb ?? 0) / 1.25, 0, 1);
     thresholdAdjust += echoPressure * 0.25;
     ratioAdjust -= echoPressure * 0.12;
+    const instabilityCompressorRelax =
+      instabilityScore * (profile?.noiseRisk === "high" ? 0.9 : profile?.noiseRisk === "medium" ? 0.75 : 0.65);
+    thresholdAdjust += instabilityCompressorRelax * 0.9;
+    ratioAdjust -= instabilityCompressorRelax * 0.35;
 
     // Smarter consistency: tighten when needed, but protect emotional peaks.
     const thresholdTighten = consistency * (0.55 + levelingNeed * 0.75);
@@ -1107,14 +1285,37 @@ const summarizeFailureReason = (error: unknown) => {
     );
     const roomRelax = profile?.roomRisk === "high" ? 1 : profile?.roomRisk === "medium" ? 0.45 : 0;
     const attack = Math.round(
-      clamp(24 - consistency * 8 + emotionProtection * 8 + roomRelax * 4 + echoPressure * 2, 14, 34)
+      clamp(
+        24 -
+          consistency * 8 +
+          emotionProtection * 8 +
+          roomRelax * 4 +
+          echoPressure * 2 +
+          instabilityCompressorRelax * 3,
+        14,
+        36
+      )
     );
     const release = Math.round(
-      clamp(170 - consistency * 45 + emotionProtection * 75 + roomRelax * 40 + echoPressure * 30, 95, 280)
+      clamp(
+        170 -
+          consistency * 45 +
+          emotionProtection * 75 +
+          roomRelax * 40 +
+          echoPressure * 30 +
+          instabilityCompressorRelax * 55,
+        95,
+        320
+      )
     );
     const compMix = clamp(
-      0.9 + levelingNeed * 0.07 - emotionProtection * 0.24 - roomRelax * 0.08 - echoPressure * 0.04,
-      0.62,
+      0.9 +
+        levelingNeed * 0.07 -
+        emotionProtection * 0.24 -
+        roomRelax * 0.08 -
+        echoPressure * 0.04 -
+        instabilityCompressorRelax * 0.12,
+      0.58,
       0.95
     );
 
@@ -1136,6 +1337,9 @@ const summarizeFailureReason = (error: unknown) => {
 
     const wetTotal = indoorGain + outdoorGain;
     const dryGain = clamp(1 - wetTotal * 0.55, 0.93, 1);
+    const wetGateThreshold = clamp(0.00045 + wetTotal * 0.028, 0.00055, 0.0024);
+    const wetGateRatio = clamp(1.16 + wetTotal * 8, 1.16, 1.34);
+    const wetGateRange = clamp(0.86 - wetTotal * 2.6, 0.68, 0.86);
 
     return [
       "asplit=3[dry][ind_src][out_src]",
@@ -1145,8 +1349,13 @@ const summarizeFailureReason = (error: unknown) => {
       `[out_src]adelay=${outdoorDelay}:all=1,highpass=f=220,lowpass=f=3000,volume=${outdoorGain.toFixed(
         4
       )}[out]`,
+      `[ind][out]amix=inputs=2:normalize=0,agate=mode=downward:threshold=${wetGateThreshold.toFixed(
+        5
+      )}:ratio=${wetGateRatio.toFixed(2)}:range=${wetGateRange.toFixed(
+        3
+      )}:attack=10:release=180:makeup=1.00:detection=rms:link=average[wet]`,
       `[dry]volume=${dryGain.toFixed(4)}[dryv]`,
-      "[dryv][ind][out]amix=inputs=3:normalize=0,alimiter=limit=-2dB:level=disabled",
+      "[dryv][wet]amix=inputs=2:normalize=0,alimiter=limit=-2dB:level=disabled",
     ].join(";");
   };
 
@@ -1657,7 +1866,11 @@ const summarizeFailureReason = (error: unknown) => {
                 roomScore ?? 0
               ).toFixed(2)}), noise ${profile.noiseRisk} (${(profile.noiseFloorDb ?? -70).toFixed(
                 1
-              )} dB; adaptive-NR ${adaptiveNoiseReductionLabel}), echo ${
+              )} dB; adaptive-NR ${adaptiveNoiseReductionLabel}), instability ${(
+                profile.instabilityScore * 100
+              ).toFixed(0)}%, clicks ${(profile.clickScore * 100).toFixed(0)}%, conf ${(
+                analysisByBase.get(job.base)?.analysisConfidence ?? 0
+              ).toFixed(2)}, tail-gate ${profile.useTailGate ? "on" : "off"}, echo ${
                 analysisByBase.get(job.base)?.echoDelayMs ?? 0
               } ms, blend ${
                 (profile.blendIndoorGain * 100).toFixed(1)
@@ -1818,7 +2031,7 @@ const summarizeFailureReason = (error: unknown) => {
             const indoorGain = profile?.blendIndoorGain ?? 0;
             const outdoorGain = profile?.blendOutdoorGain ?? 0;
             if (indoorGain + outdoorGain <= 0.0001) {
-              appendLog(`[Blend] ${job.base}: bypassed (low analysis confidence).`);
+              appendLog(`[Blend] ${job.base}: bypassed (adaptive blend gain near zero for room/noise safety).`);
             } else {
               try {
                 setStatus(`Blend: ${job.base} (${i + 1}/${jobs.length})`);

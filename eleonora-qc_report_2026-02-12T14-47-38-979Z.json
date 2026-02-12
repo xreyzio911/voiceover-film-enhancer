@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-02-12T14:47:38.979Z",
+  "status": "Done with warnings",
+  "reports": [
+    {
+      "fileName": "Eleonora_1-10_A85 (1).wav",
+      "fileSize": 255897714,
+      "status": "warning",
+      "overallRisk": 0.4634333878838346,
+      "durationSec": 1332.8,
+      "sampleRate": 48000,
+      "peakDb": -4.109338770398756,
+      "clipPct": 0,
+      "noiseFloorDb": -110,
+      "pauseNoiseFloorDb": -110,
+      "noiseContrastDb": 80,
+      "speechRatioPct": 9.465036014405763,
+      "dynamicRangeDb": 30.803471593443867,
+      "instabilityScore": 0.7448805866913804,
+      "compressionScore": 0.20123788793481662,
+      "clickScore": 1,
+      "echoScore": 0.8030412831128946,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Click/transient artifacts detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Use instability-safe leveling (slower gain riding, less compression mix).",
+        "Run click-taming cleanup and recheck consonant spikes.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    }
+  ]
+}

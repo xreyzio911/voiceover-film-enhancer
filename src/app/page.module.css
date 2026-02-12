@@ -77,6 +77,12 @@
   color: var(--muted);
 }
 
+.badgeAction {
+  color: var(--text);
+  border-color: rgba(110, 214, 198, 0.38);
+  background: rgba(110, 214, 198, 0.12);
+}
+
 @media (max-width: 640px) {
   .heroTop {
     flex-direction: column;

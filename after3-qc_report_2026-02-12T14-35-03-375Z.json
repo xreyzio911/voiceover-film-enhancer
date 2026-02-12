@@ -1,0 +1,64 @@
+{
+  "generatedAt": "2026-02-12T14:35:03.375Z",
+  "status": "Done with warnings",
+  "reports": [
+    {
+      "fileName": "Eleonora_1-10_A85.wav",
+      "fileSize": 255897714,
+      "status": "warning",
+      "overallRisk": 0.4666116300014751,
+      "durationSec": 1332.8,
+      "sampleRate": 48000,
+      "peakDb": -3.888150371629739,
+      "clipPct": 0,
+      "noiseFloorDb": -110,
+      "pauseNoiseFloorDb": -110,
+      "noiseContrastDb": 80,
+      "speechRatioPct": 9.40576230492197,
+      "dynamicRangeDb": 30.7105220658836,
+      "instabilityScore": 0.7602476939543299,
+      "compressionScore": 0.20060684983847005,
+      "clickScore": 1,
+      "echoScore": 0.8000544957600256,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Click/transient artifacts detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Use instability-safe leveling (slower gain riding, less compression mix).",
+        "Run click-taming cleanup and recheck consonant spikes.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    },
+    {
+      "fileName": "Viviana_1-10_A85.wav",
+      "fileSize": 254400114,
+      "status": "warning",
+      "overallRisk": 0.47404886279691505,
+      "durationSec": 1325,
+      "sampleRate": 48000,
+      "peakDb": -2.0013240863288395,
+      "clipPct": 0,
+      "noiseFloorDb": -110,
+      "pauseNoiseFloorDb": -110,
+      "noiseContrastDb": 51.63909069849824,
+      "speechRatioPct": 13.654339622641508,
+      "dynamicRangeDb": 28.845242014852964,
+      "instabilityScore": 0.7913416182155034,
+      "compressionScore": 0.1903183198225082,
+      "clickScore": 1,
+      "echoScore": 0.8204206472316021,
+      "flags": [
+        "Large voice-level jumps detected.",
+        "Click/transient artifacts detected.",
+        "Echo/reverb tail risk detected."
+      ],
+      "recommendations": [
+        "Use instability-safe leveling (slower gain riding, less compression mix).",
+        "Run click-taming cleanup and recheck consonant spikes.",
+        "Keep room cleanup on and verify tail control + notch behavior."
+      ]
+    }
+  ]
+}

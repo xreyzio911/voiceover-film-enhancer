@@ -1,0 +1,263 @@
+.layout {
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 0.95fr);
+  gap: 16px;
+}
+
+.card {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--stroke);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+}
+
+.dropzone {
+  border: 1.5px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 16px;
+  background: rgba(10, 12, 17, 0.7);
+  padding: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.dropActive {
+  border-color: var(--accent-2);
+  background: rgba(110, 214, 198, 0.08);
+}
+
+.dropTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.dropHint {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.button,
+.buttonSecondary,
+.buttonGhost {
+  border-radius: 999px;
+  padding: 9px 14px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.button {
+  border: none;
+  background: var(--accent);
+  color: #1a1a1a;
+}
+
+.buttonSecondary {
+  background: transparent;
+  border-color: var(--stroke);
+  color: var(--text);
+}
+
+.buttonGhost {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: var(--stroke);
+  color: var(--text);
+}
+
+.button:disabled,
+.buttonSecondary:disabled,
+.buttonGhost:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.progress {
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.fileList {
+  display: grid;
+  gap: 6px;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.fileItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 7px 10px;
+  font-size: 0.85rem;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: 8px;
+}
+
+.badges {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.badge {
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.footerNote {
+  color: var(--muted);
+  margin-top: 12px;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+.emptyState {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.reportList {
+  margin-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.reportItem {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(12, 14, 18, 0.6);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.reportHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.84rem;
+  margin-top: 2px;
+}
+
+.statusBadge {
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.statusOk {
+  background: rgba(110, 214, 198, 0.12);
+  border-color: rgba(110, 214, 198, 0.45);
+}
+
+.statusWarning {
+  background: rgba(245, 199, 90, 0.14);
+  border-color: rgba(245, 199, 90, 0.45);
+}
+
+.statusError {
+  background: rgba(255, 107, 107, 0.14);
+  border-color: rgba(255, 107, 107, 0.5);
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+
+.metric {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.metric span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.metric strong {
+  font-size: 0.87rem;
+}
+
+.section {
+  display: grid;
+  gap: 6px;
+}
+
+.sectionTitle {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.section ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.section li {
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.errorText {
+  color: #ff9a9a;
+  font-size: 0.85rem;
+}
+
+.warningBanner {
+  border: 1px solid rgba(245, 199, 90, 0.45);
+  border-radius: 12px;
+  background: rgba(245, 199, 90, 0.1);
+  padding: 10px 12px;
+  font-size: 0.86rem;
+}
+
+@media (max-width: 900px) {
+  .panel {
+    grid-template-columns: 1fr;
+  }
+}
+
