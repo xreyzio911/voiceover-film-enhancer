@@ -9,7 +9,7 @@
 - [x] Port the experimental design tokens, app shell, tool navigation, cards, login, splitter, and QC styling while preserving stable-only behavior.
 - [x] Verify desktop fidelity and interactions in the X Chrome profile, mobile layout at 390 px, and a real two-file completion path in Chrome.
 - [x] Run focused tests, `npm run test:audio-qc`, `npm run lint`, `npm run build`, reviews, and scoped diff checks.
-- [ ] Commit, push `main`, and verify the exact Vercel Production deployment.
+- [x] Commit, push `main`, and verify the exact Vercel Production deployment.
 
 ## Review Notes
 
@@ -19,6 +19,7 @@
 - Verification: 155 tests passed with 1 intentional worker skip; focused lifecycle coverage is 100% line/branch/function; lint and production build passed; code and security reviews found no blockers.
 - `npm audit` still reports pre-existing dependency advisories (including high findings in Next.js); this change does not modify dependency versions or lockfiles.
 - `public/ffmpeg/ffmpeg-core.js` remains a pre-existing modified-looking worktree artifact whose HEAD, index, and worktree hashes are identical. It must not be staged.
+- Implementation commit `0d4ae98` reached Vercel `Ready` / `Production` as deployment `5fP8Qp3SF`; the production domain served the updated sign-in surface without browser console errors.
 
 # Stable UI Feature Removal and Auto Pilot Disablement
 
