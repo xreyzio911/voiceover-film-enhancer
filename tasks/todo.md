@@ -1,3 +1,25 @@
+# Processing Completion Fix and Experimental UI Style Port
+
+## Checklist
+
+- [x] Inspect the supplied stuck-processing screenshot and trace the late batch loudness-alignment FFmpeg reset path.
+- [x] Compare the stable UI against the current experimental working-tree UI without modifying the experimental checkout.
+- [x] Add focused regression coverage for end-of-stage FFmpeg recycling and generic progress-status updates.
+- [x] Fix the late reset/progress state so completed batches settle to Done without unnecessary worker churn.
+- [x] Port the experimental design tokens, app shell, tool navigation, cards, login, splitter, and QC styling while preserving stable-only behavior.
+- [x] Verify desktop fidelity and interactions in the X Chrome profile, mobile layout at 390 px, and a real two-file completion path in Chrome.
+- [x] Run focused tests, `npm run test:audio-qc`, `npm run lint`, `npm run build`, reviews, and scoped diff checks.
+- [ ] Commit, push `main`, and verify the exact Vercel Production deployment.
+
+## Review Notes
+
+- The experimental checkout is the accepted visual reference. Its runtime/audio changes are explicitly out of scope; only its UI structure and styling are being ported.
+- The supplied failure occurs after per-file outputs are ready: the batch-alignment duration guard resets FFmpeg after the last stage item, while the global FFmpeg listener can overwrite finalization copy with generic `Processing NN%`.
+- Browser smoke processed two generated 48 kHz WAV files through mix-ready batch alignment: the queue settled at 2 done / 0 active / 0 failed, both outputs appeared, status settled to `Done`, and no post-finalization alignment reset was logged.
+- Verification: 155 tests passed with 1 intentional worker skip; focused lifecycle coverage is 100% line/branch/function; lint and production build passed; code and security reviews found no blockers.
+- `npm audit` still reports pre-existing dependency advisories (including high findings in Next.js); this change does not modify dependency versions or lockfiles.
+- `public/ffmpeg/ffmpeg-core.js` remains a pre-existing modified-looking worktree artifact whose HEAD, index, and worktree hashes are identical. It must not be staged.
+
 # Stable UI Feature Removal and Auto Pilot Disablement
 
 ## Checklist

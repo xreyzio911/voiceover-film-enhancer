@@ -67,6 +67,10 @@ import { queueBrowserDownload, triggerBrowserDownload } from "../lib/downloadBlo
 import { estimateVoZipBytes, planVoZipExportParts } from "../lib/downloadPolicy";
 import { shouldEmitMixReadyOutput } from "../lib/outputDeliveryPolicy";
 import {
+  shouldPublishGenericFfmpegProgress,
+  shouldRecycleFfmpegBeforeOperation,
+} from "../lib/ffmpegLifecyclePolicy";
+import {
   formatLongFormPartTag,
   planLongFormChunks,
   shouldUseLongFormSafeMode,
@@ -992,19 +996,17 @@ export default function VoLeveler({ aiAutoPilotEnabled }: { aiAutoPilotEnabled: 
     });
 
     ffmpeg.on("progress", ({ progress }) => {
-      if (progress > 0) {
+      const activeBase = activeQueueBaseRef.current;
+      if (progress > 0 && shouldPublishGenericFfmpegProgress(activeBase)) {
         setStatus(`Processing ${(progress * 100).toFixed(0)}%`);
-        const activeBase = activeQueueBaseRef.current;
-        if (activeBase) {
-          const clampedProgress = clamp(progress, 0, 1);
-          if (Math.abs(clampedProgress - activeQueueProgressRef.current) >= 0.03 || clampedProgress >= 0.995) {
-            activeQueueProgressRef.current = clampedProgress;
-            updateQueueItem(activeBase, {
-              status: "working",
-              stageLabel: activeQueueStageRef.current,
-              progress: clampedProgress,
-            });
-          }
+        const clampedProgress = clamp(progress, 0, 1);
+        if (Math.abs(clampedProgress - activeQueueProgressRef.current) >= 0.03 || clampedProgress >= 0.995) {
+          activeQueueProgressRef.current = clampedProgress;
+          updateQueueItem(activeBase, {
+            status: "working",
+            stageLabel: activeQueueStageRef.current,
+            progress: clampedProgress,
+          });
         }
       }
     });
@@ -5157,21 +5159,21 @@ const summarizeFailureReason = (error: unknown) => {
 
     let activeFfmpeg = ffmpeg;
     let cumulativeAudioSec = 0;
-    const recycleIfNeeded = async (stage: "measure" | "render") => {
-      if (cumulativeAudioSec < BATCH_AUDIO_RECYCLE_SECONDS) return;
+    const recycleBeforeOperation = async (stage: "measure" | "render") => {
+      if (!shouldRecycleFfmpegBeforeOperation(cumulativeAudioSec, BATCH_AUDIO_RECYCLE_SECONDS)) return;
       activeFfmpeg = await refreshFfmpeg(
         `batch loudness alignment ${stage} memory guard (${Math.round(cumulativeAudioSec)}s processed)`,
       );
       cumulativeAudioSec = 0;
+      setStatus("Finalizing batch loudness alignment");
     };
 
-    const noteProcessedAudio = async (entry: OutputEntry, stage: "measure" | "render") => {
+    const noteProcessedAudio = (entry: OutputEntry) => {
       cumulativeAudioSec += estimateOutputAudioSeconds(entry);
-      await recycleIfNeeded(stage);
     };
 
     try {
-      setStatus("Batch loudness alignment");
+      setStatus("Finalizing batch loudness alignment");
       const targetsByVariant = new Map<OutputEntry["variant"], AlignmentTarget[]>();
       for (const target of targets) {
         const variantTargets = targetsByVariant.get(target.entry.variant) ?? [];
@@ -5191,6 +5193,7 @@ const summarizeFailureReason = (error: unknown) => {
         const measurementsByGroup = new Map<string, number[]>();
         const measurementByIndex = new Map<number, number | null>();
         for (const target of variantTargets) {
+          await recycleBeforeOperation("measure");
           const group = groupedTargets.get(target.groupId) ?? [];
           group.push(target);
           groupedTargets.set(target.groupId, group);
@@ -5213,7 +5216,7 @@ const summarizeFailureReason = (error: unknown) => {
           } finally {
             await safeDeleteFile(activeFfmpeg, inputName);
           }
-          await noteProcessedAudio(target.entry, "measure");
+          noteProcessedAudio(target.entry);
         }
 
         const groupMeasurements = Array.from(groupedTargets.keys()).map((groupId) => ({
@@ -5240,6 +5243,7 @@ const summarizeFailureReason = (error: unknown) => {
           }
 
           for (const target of groupTargets) {
+            await recycleBeforeOperation("render");
             const inputName = `batch_align_${target.index}_in.wav`;
             const outputName = `batch_align_${target.index}_out.wav`;
             let nextEntry = target.entry;
@@ -5325,7 +5329,7 @@ const summarizeFailureReason = (error: unknown) => {
                 1,
               )} LUFS.`,
             );
-            await noteProcessedAudio(nextEntry, "render");
+            noteProcessedAudio(nextEntry);
           }
           if (groupTargets.length > 1) {
             appendLog(
@@ -8197,8 +8201,15 @@ const summarizeFailureReason = (error: unknown) => {
     <div className={styles.layout}>
       <div className={styles.panel}>
         <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitleGroup}>
+              <h3>Source audio</h3>
+              <p className={styles.cardDescription}>Add the WAV files you want to prepare for delivery.</p>
+            </div>
+          </div>
           <div
             className={`${styles.dropzone} ${dragActive ? styles.dropActive : ""}`}
+            aria-label="WAV file drop area"
             onDragOver={(event) => {
               event.preventDefault();
               setDragActive(true);
@@ -8255,6 +8266,12 @@ const summarizeFailureReason = (error: unknown) => {
         </div>
 
         <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitleGroup}>
+              <h3>Processing profile</h3>
+              <p className={styles.cardDescription}>Set the core behavior while delivery safety checks stay active.</p>
+            </div>
+          </div>
           <div className={styles.optionGrid}>
             <div className={styles.field}>
               <label className={styles.label}>Loudness target</label>
@@ -8517,7 +8534,7 @@ const summarizeFailureReason = (error: unknown) => {
             >
               AI Review
             </button>
-            <div className={styles.progress}>{status}</div>
+            <div className={styles.progress} role="status" aria-live="polite" aria-atomic="true">{status}</div>
           </div>
 
           <div className={styles.footerNote}>
@@ -8528,7 +8545,10 @@ const summarizeFailureReason = (error: unknown) => {
 
       <div className={styles.card}>
         <div className={styles.queueHeader}>
-          <h3>Batch Queue</h3>
+          <div className={styles.cardTitleGroup}>
+            <h3>Batch queue</h3>
+            <p className={styles.cardDescription}>Follow each file from analysis through final delivery checks.</p>
+          </div>
           {queueCounts.total > 0 && (
             <div className={styles.queueSummaryBadges}>
               <span className={`${styles.queueCountBadge} ${styles.queueCountNeutral}`}>
@@ -8629,7 +8649,12 @@ const summarizeFailureReason = (error: unknown) => {
 
       <div className={styles.panel}>
         <div className={styles.card}>
-          <h3>Outputs</h3>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitleGroup}>
+              <h3>Deliverables</h3>
+              <p className={styles.cardDescription}>Download prepared WAV files and review bundles.</p>
+            </div>
+          </div>
           {(outputs.length > 0 || reviewBundles.length > 0) && (
             <div className={`${styles.controls} ${styles.sectionTop}`}>
               {outputs.length > 0 && (
@@ -8736,7 +8761,12 @@ const summarizeFailureReason = (error: unknown) => {
           </div>
         </div>
         <div className={styles.card}>
-          <h3>Processing Log</h3>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitleGroup}>
+              <h3>Activity log</h3>
+              <p className={styles.cardDescription}>Detailed processing evidence for troubleshooting and review.</p>
+            </div>
+          </div>
           <div className={`${styles.log} ${styles.sectionTop}`}>
             {logs.length === 0 ? "No logs yet." : logs.join("\n")}
           </div>

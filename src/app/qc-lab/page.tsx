@@ -23,30 +23,33 @@ export default async function QcLabPage() {
   }
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <div className={styles.shell}>
-        <header className={styles.hero}>
-          <div className={styles.heroTop}>
-            <div className={styles.accountRow}>
-              <div className={styles.account}>{email}</div>
-              <span className={styles.localBadge}>Local only</span>
-            </div>
-            <div className={styles.navActions}>
-              <Link href="/" className={styles.backLink}>
-                Back to Optimizer
-              </Link>
-              <SignOutButton className={styles.logoutButton} />
+        <header className={styles.appHeader}>
+          <div className={styles.brandLockup}>
+            <span className={styles.brandMark} aria-hidden="true">SP</span>
+            <div>
+              <div className={styles.brandName}>Shorts Projektt</div>
+              <div className={styles.brandContext}>Quality workspace</div>
             </div>
           </div>
-          <h1 className={styles.title}>Analyze + QC Report Lab</h1>
-          <p className={styles.subtitle}>
-            Offline diagnostics workspace for VO quality checks before production processing.
-          </p>
+          <div className={styles.navActions}>
+            <span className={styles.localBadge}>{email} / Local only</span>
+            <Link href="/" className={styles.backLink}>Back to production</Link>
+            <SignOutButton className={styles.backLink} />
+          </div>
         </header>
+
+        <section className={styles.pageIntro} aria-labelledby="qc-lab-title">
+          <h1 id="qc-lab-title" className={styles.title}>QC Lab</h1>
+          <p className={styles.subtitle}>
+            Inspect source quality, compare review bundles, and document delivery decisions.
+          </p>
+        </section>
 
         <QcReportLab />
       </div>
-    </div>
+    </main>
   );
 }
 

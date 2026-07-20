@@ -1,98 +1,133 @@
 .page {
-  min-height: 100vh;
-  padding: 42px 24px 64px;
-  display: flex;
-  justify-content: center;
+  min-height: 100dvh;
+  padding: 0 28px 64px;
 }
 
 .shell {
-  width: min(1120px, 100%);
-  display: grid;
-  gap: 16px;
+  width: min(1320px, 100%);
+  margin: 0 auto;
 }
 
-.hero {
-  display: grid;
-  gap: 10px;
-}
-
-.heroTop {
+.appHeader {
+  min-height: 72px;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  gap: 12px;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
 }
 
-.accountRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.account {
-  font-size: 0.85rem;
-  color: var(--muted);
-  border: 1px solid var(--stroke);
-  border-radius: 999px;
-  padding: 6px 11px;
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.localBadge {
-  border: 1px solid rgba(110, 214, 198, 0.45);
-  border-radius: 999px;
-  background: rgba(110, 214, 198, 0.12);
-  font-size: 0.75rem;
-  color: var(--text);
-  padding: 5px 9px;
-}
-
+.brandLockup,
 .navActions {
   display: flex;
   align-items: center;
-  gap: 10px;
+}
+
+.brandLockup {
+  min-width: 0;
+  gap: 12px;
+}
+
+.brandMark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border));
+  border-radius: 9px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.brandName {
+  color: var(--text);
+  font-size: 0.94rem;
+  font-weight: 600;
+}
+
+.brandContext {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+}
+
+.localBadge {
+  color: var(--text-faint);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.69rem;
+}
+
+.navActions {
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .backLink {
-  border: 1px solid var(--stroke);
-  border-radius: 999px;
-  padding: 8px 13px;
-  font-size: 0.84rem;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 0 13px;
+  color: var(--text-subtle);
+  background: var(--surface);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out), background 150ms var(--ease-out), transform 150ms var(--ease-out);
 }
 
-.logoutButton {
-  border: 1px solid var(--stroke);
-  background: transparent;
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 13px;
-  font-size: 0.84rem;
-  cursor: pointer;
+.backLink:active {
+  transform: scale(0.97);
+}
+
+.pageIntro {
+  padding: 32px 0 26px;
 }
 
 .title {
-  font-size: clamp(1.8rem, 2.6vw, 2.7rem);
-  letter-spacing: -0.02em;
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  line-height: 1;
+  letter-spacing: -0.055em;
   font-weight: 600;
 }
 
 .subtitle {
-  color: var(--muted);
-  max-width: 700px;
-  font-size: 0.92rem;
-  line-height: 1.45;
+  max-width: 640px;
+  margin-top: 10px;
+  color: var(--text-subtle);
+  font-size: 0.98rem;
+  line-height: 1.55;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .backLink:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+    background: var(--surface-raised);
+  }
 }
 
 @media (max-width: 760px) {
-  .heroTop {
-    flex-direction: column;
-    align-items: flex-start;
+  .page {
+    padding: 0 16px 40px;
   }
 
-  .navActions {
-    width: 100%;
+  .appHeader {
+    min-height: auto;
+    padding: 14px 0;
+  }
+
+  .brandContext,
+  .localBadge {
+    display: none;
+  }
+
+  .pageIntro {
+    padding: 26px 0 22px;
   }
 }
-

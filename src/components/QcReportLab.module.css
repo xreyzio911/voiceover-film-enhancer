@@ -10,11 +10,11 @@
 }
 
 .card {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--stroke);
-  border-radius: 20px;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-surface);
   padding: 18px;
-  box-shadow: var(--shadow);
 }
 
 .card h3 {
@@ -23,41 +23,43 @@
 
 .modeSwitch {
   display: inline-flex;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--stroke);
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
 }
 
 .modeButton {
-  border-radius: 999px;
-  padding: 9px 14px;
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 0 14px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-subtle);
+  transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out), background 150ms var(--ease-out), transform 150ms var(--ease-out);
 }
 
 .modeButtonActive {
-  background: rgba(110, 214, 198, 0.14);
-  border-color: rgba(110, 214, 198, 0.38);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
   color: var(--text);
 }
 
 .dropzone {
-  border: 1.5px dashed rgba(255, 255, 255, 0.2);
-  border-radius: 16px;
-  background: rgba(10, 12, 17, 0.7);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
   padding: 18px;
   display: grid;
   gap: 10px;
 }
 
 .dropActive {
-  border-color: var(--accent-2);
-  background: rgba(110, 214, 198, 0.08);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-muted));
 }
 
 .dropTitle {
@@ -66,8 +68,9 @@
 }
 
 .dropHint {
-  color: var(--muted);
-  font-size: 0.9rem;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+  line-height: 1.45;
 }
 
 .controls {
@@ -79,29 +82,40 @@
 .button,
 .buttonSecondary,
 .buttonGhost {
-  border-radius: 999px;
-  padding: 9px 14px;
+  min-height: 42px;
+  border-radius: var(--radius-control);
+  padding: 0 14px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
+  transition: transform 150ms var(--ease-out), color 150ms var(--ease-out), background 150ms var(--ease-out), border-color 150ms var(--ease-out);
 }
 
 .button {
   border: none;
   background: var(--accent);
-  color: #1a1a1a;
+  color: var(--accent-contrast);
 }
 
 .buttonSecondary {
   background: transparent;
-  border-color: var(--stroke);
+  border-color: var(--border-strong);
   color: var(--text);
 }
 
 .buttonGhost {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: var(--stroke);
-  color: var(--text);
+  background: var(--surface-raised);
+  border-color: var(--border);
+  color: var(--text-subtle);
+}
+
+.button:active,
+.buttonSecondary:active,
+.buttonGhost:active,
+.modeButton:active,
+.choiceButton:active,
+.tagButton:active {
+  transform: scale(0.97);
 }
 
 .button:disabled,
@@ -116,7 +130,7 @@
 
 .progress {
   font-size: 0.86rem;
-  color: var(--muted);
+  color: var(--text-subtle);
   font-family: var(--font-mono), ui-monospace, monospace;
 }
 
@@ -133,8 +147,8 @@
   justify-content: space-between;
   gap: 12px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   padding: 7px 10px;
   font-size: 0.85rem;
 }
@@ -143,7 +157,7 @@
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  color: var(--muted);
+  color: var(--text-subtle);
   font-size: 0.9rem;
   margin-top: 8px;
 }
@@ -158,14 +172,14 @@
 .badge {
   padding: 5px 9px;
   border-radius: 999px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-subtle);
   font-size: 0.78rem;
 }
 
 .footerNote {
-  color: var(--muted);
+  color: var(--text-faint);
   margin-top: 12px;
   font-size: 0.86rem;
   line-height: 1.45;
@@ -173,7 +187,7 @@
 
 .emptyState {
   margin-top: 12px;
-  color: var(--muted);
+  color: var(--text-subtle);
   font-size: 0.9rem;
 }
 
@@ -185,9 +199,9 @@
 
 .reportItem,
 .reviewBundleCard {
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(12, 14, 18, 0.6);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -201,32 +215,35 @@
 }
 
 .muted {
-  color: var(--muted);
+  color: var(--text-subtle);
   font-size: 0.84rem;
   margin-top: 2px;
 }
 
 .statusBadge {
   border-radius: 999px;
-  border: 1px solid var(--stroke);
+  border: 1px solid var(--border);
   padding: 5px 10px;
   font-size: 0.75rem;
   line-height: 1;
 }
 
 .statusOk {
-  background: rgba(110, 214, 198, 0.12);
-  border-color: rgba(110, 214, 198, 0.45);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--success) 38%, var(--border));
 }
 
 .statusWarning {
-  background: rgba(245, 199, 90, 0.14);
-  border-color: rgba(245, 199, 90, 0.45);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
 }
 
 .statusError {
-  background: rgba(255, 107, 107, 0.14);
-  border-color: rgba(255, 107, 107, 0.5);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
 }
 
 .metricGrid,
@@ -238,15 +255,15 @@
 
 .metric {
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   padding: 8px;
   display: grid;
   gap: 2px;
 }
 
 .metric span {
-  color: var(--muted);
+  color: var(--text-faint);
   font-size: 0.75rem;
 }
 
@@ -261,7 +278,7 @@
 
 .sectionTitle {
   font-size: 0.85rem;
-  color: var(--muted);
+  color: var(--text-subtle);
 }
 
 .section ul {
@@ -283,15 +300,15 @@
 
 .label {
   font-size: 0.84rem;
-  color: var(--muted);
+  color: var(--text-subtle);
 }
 
 .select,
 .textarea {
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
   color: var(--text);
   padding: 10px 12px;
   font: inherit;
@@ -323,9 +340,9 @@
 
 .audioCard,
 .reviewCandidateCard {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   padding: 10px;
   display: grid;
   gap: 8px;
@@ -355,9 +372,9 @@
 }
 
 .autoReviewPanel {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   padding: 12px;
   display: grid;
   gap: 10px;
@@ -377,9 +394,9 @@
 }
 
 .autoReviewCard {
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(9, 11, 15, 0.55);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
   padding: 10px;
   display: grid;
   gap: 8px;
@@ -402,22 +419,25 @@
   padding: 4px 8px;
   font-size: 0.72rem;
   line-height: 1;
-  border: 1px solid var(--stroke);
+  border: 1px solid var(--border);
 }
 
 .findingPass {
-  background: rgba(110, 214, 198, 0.12);
-  border-color: rgba(110, 214, 198, 0.4);
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 7%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--success) 36%, var(--border));
 }
 
 .findingWarn {
-  background: rgba(245, 199, 90, 0.14);
-  border-color: rgba(245, 199, 90, 0.42);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
 }
 
 .findingFail {
-  background: rgba(255, 107, 107, 0.14);
-  border-color: rgba(255, 107, 107, 0.46);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--danger) 40%, var(--border));
 }
 
 .choiceRow {
@@ -428,19 +448,22 @@
 
 .choiceButton,
 .tagButton {
-  border-radius: 999px;
-  padding: 8px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.04);
+  min-height: 40px;
+  border-radius: var(--radius-control);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
   color: var(--text);
   cursor: pointer;
   font: inherit;
+  transition: transform 150ms var(--ease-out), color 150ms var(--ease-out), background 150ms var(--ease-out), border-color 150ms var(--ease-out);
 }
 
 .choiceButtonActive,
 .tagButtonActive {
-  background: rgba(110, 214, 198, 0.16);
-  border-color: rgba(110, 214, 198, 0.42);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-raised));
+  border-color: color-mix(in srgb, var(--accent) 38%, var(--border));
 }
 
 .tagGrid {
@@ -450,8 +473,28 @@
 }
 
 .reviewFootnote {
-  color: var(--muted);
+  color: var(--text-faint);
   font-size: 0.82rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button:hover {
+    background: var(--accent-hover);
+  }
+
+  .buttonSecondary:hover,
+  .buttonGhost:hover,
+  .modeButton:hover,
+  .choiceButton:hover,
+  .tagButton:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+    background: var(--surface-raised);
+  }
+
+  .dropzone:hover {
+    border-color: color-mix(in srgb, var(--accent) 30%, var(--border-strong));
+  }
 }
 
 @media (max-width: 900px) {
@@ -461,5 +504,29 @@
 
   .reviewDecisionGrid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .card {
+    padding: 14px;
+  }
+
+  .modeSwitch,
+  .controls {
+    width: 100%;
+  }
+
+  .modeButton,
+  .controls .button,
+  .controls .buttonSecondary,
+  .controls .buttonGhost {
+    flex: 1;
+  }
+
+  .reportHeader,
+  .autoReviewHeader {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

@@ -320,8 +320,15 @@ export default function AudioTrackSplitter() {
     <div className={styles.layout}>
       <div className={styles.panel}>
         <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitleGroup}>
+              <h3>Source tracks</h3>
+              <p className={styles.cardDescription}>Add mixed WAV files to separate dialogue and background audio.</p>
+            </div>
+          </div>
           <div
             className={`${styles.dropzone} ${dragActive ? styles.dropActive : ""}`}
+            aria-label="Mixed WAV file drop area"
             onDragOver={(event) => {
               event.preventDefault();
               setDragActive(true);
@@ -369,7 +376,12 @@ export default function AudioTrackSplitter() {
         </div>
 
         <div className={styles.card}>
-          <h3>Splitter Export</h3>
+          <div className={styles.cardHeader}>
+            <div className={styles.cardTitleGroup}>
+              <h3>Stem export</h3>
+              <p className={styles.cardDescription}>Each source produces a matched background and vocal WAV.</p>
+            </div>
+          </div>
           <div className={styles.suffixGrid}>
             <span>originalName_BGM.wav</span>
             <span>originalName_VOCAL.wav</span>
@@ -387,7 +399,7 @@ export default function AudioTrackSplitter() {
                 Download ZIP
               </button>
             )}
-            <div className={styles.progress}>{status}</div>
+            <div className={styles.progress} role="status" aria-live="polite" aria-atomic="true">{status}</div>
           </div>
           <div className={styles.footerNote}>
             Real separation runs on the configured local RoFormer engine. First run may download the model;
@@ -399,7 +411,10 @@ export default function AudioTrackSplitter() {
 
       <div className={styles.card}>
         <div className={styles.queueHeader}>
-          <h3>Splitter Queue</h3>
+          <div className={styles.cardTitleGroup}>
+            <h3>Splitter queue</h3>
+            <p className={styles.cardDescription}>Track each file through separation and packaging.</p>
+          </div>
           {queueCounts.total > 0 && (
             <div className={styles.queueSummaryBadges}>
               <span>{queueCounts.total} total</span>
@@ -453,7 +468,10 @@ export default function AudioTrackSplitter() {
       {report && (
         <div className={styles.card}>
           <div className={styles.queueHeader}>
-            <h3>Split Report</h3>
+            <div className={styles.cardTitleGroup}>
+              <h3>Split report</h3>
+              <p className={styles.cardDescription}>Output names, signal checks, and worker warnings.</p>
+            </div>
             <div className={styles.reportMeta}>
               {report.engine} - {report.succeeded} succeeded / {report.failed} failed
             </div>

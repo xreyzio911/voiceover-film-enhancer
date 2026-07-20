@@ -21,28 +21,54 @@ export default async function Home() {
   }
 
   return (
-    <div className={styles.page}>
+    <main className={styles.page}>
       <div className={styles.shell}>
-        <header className={styles.hero}>
-          <div className={styles.heroTop}>
-            <div className={styles.account}>{email}</div>
-            {!localMode && <SignOutButton className={styles.logoutButton} />}
+        <header className={styles.appHeader}>
+          <div className={styles.brandLockup}>
+            <span className={styles.brandMark} aria-hidden="true">SP</span>
+            <div>
+              <div className={styles.brandName}>Shorts Projektt</div>
+              <div className={styles.brandContext}>Audio workspace</div>
+            </div>
           </div>
-          <h1 className={styles.title}>Shorts Projektt Internal VO Optimizer</h1>
-          <p className={styles.subtitle}>Internal tool for VO leveling and delivery exports.</p>
-          <div className={styles.badges}>
-            <span className={styles.badge}>48 kHz / 32-bit float</span>
-            <span className={styles.badge}>ATSC A/85 + EBU R128</span>
-            <span className={styles.badge}>Batch processing</span>
+          <div className={styles.headerActions}>
             {localMode && (
-              <Link href="/qc-lab" className={`${styles.badge} ${styles.badgeAction}`}>
-                Analyze + QC Lab
+              <Link href="/qc-lab" className={styles.utilityLink}>
+                QC Lab
               </Link>
             )}
+            <div className={styles.accountBlock}>
+              <span className={styles.accountLabel}>{localMode ? "Local session" : "Signed in"}</span>
+              <span className={styles.account}>{email}</span>
+            </div>
+            {!localMode && <SignOutButton className={styles.logoutButton} />}
           </div>
         </header>
+
+        <section className={styles.pageIntro} aria-labelledby="workspace-title">
+          <div className={styles.introCopy}>
+            <h1 id="workspace-title" className={styles.title}>Voiceover Production</h1>
+            <p className={styles.subtitle}>
+              Level, review, and export consistent voiceover from one controlled workspace.
+            </p>
+          </div>
+          <dl className={styles.specs} aria-label="Workspace specifications">
+            <div>
+              <dt>Format</dt>
+              <dd>48 kHz float</dd>
+            </div>
+            <div>
+              <dt>Quality</dt>
+              <dd>Exact final QC</dd>
+            </div>
+            <div>
+              <dt>Workflow</dt>
+              <dd>Batch ready</dd>
+            </div>
+          </dl>
+        </section>
         <AppTools aiAutoPilotEnabled={isAiAutoPilotEnabled(process.env.VO_AI_AUTO_PILOT_ENABLED)} />
       </div>
-    </div>
+    </main>
   );
 }

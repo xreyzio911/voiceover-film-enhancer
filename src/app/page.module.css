@@ -1,91 +1,235 @@
 .page {
-  min-height: 100vh;
-  padding: 48px 24px 72px;
-  display: flex;
-  justify-content: center;
+  min-height: 100dvh;
+  padding: 0 28px 64px;
 }
 
 .shell {
-  width: min(1100px, 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+  width: min(1440px, 100%);
+  margin: 0 auto;
 }
 
-.hero {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.heroTop {
+.appHeader {
+  min-height: 72px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.brandLockup,
+.headerActions,
+.accountBlock {
+  display: flex;
+  align-items: center;
+}
+
+.brandLockup {
+  min-width: 0;
+  gap: 12px;
+}
+
+.brandMark {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, var(--border));
+  border-radius: 9px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.brandName {
+  color: var(--text);
+  font-size: 0.94rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.brandContext,
+.accountLabel {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.headerActions {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.accountBlock {
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
 }
 
 .account {
-  font-size: 0.86rem;
-  color: var(--muted);
-  border: 1px solid var(--stroke);
-  border-radius: 999px;
-  padding: 6px 11px;
-  background: rgba(255, 255, 255, 0.04);
+  max-width: 240px;
+  overflow: hidden;
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.utilityLink,
+.logoutButton {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 0 13px;
+  color: var(--text-subtle);
+  background: var(--surface);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 150ms var(--ease-out), border-color 150ms var(--ease-out), background 150ms var(--ease-out), transform 150ms var(--ease-out);
 }
 
 .logoutButton {
-  border: 1px solid var(--stroke);
   background: transparent;
-  color: var(--text);
-  border-radius: 999px;
-  padding: 8px 13px;
-  font-size: 0.86rem;
-  cursor: pointer;
 }
 
-.logoutButton:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.05);
+.utilityLink:active,
+.logoutButton:active {
+  transform: scale(0.97);
+}
+
+.pageIntro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 32px;
+  padding: 32px 0 26px;
+}
+
+.introCopy {
+  min-width: 0;
 }
 
 .title {
-  font-size: clamp(2rem, 2.8vw, 3.2rem);
+  max-width: 720px;
+  font-size: clamp(2rem, 4vw, 3.75rem);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  line-height: 1;
+  letter-spacing: -0.055em;
 }
 
 .subtitle {
-  color: var(--muted);
-  font-size: 0.95rem;
-  max-width: 600px;
-  line-height: 1.45;
+  max-width: 560px;
+  margin-top: 10px;
+  color: var(--text-subtle);
+  font-size: 0.98rem;
+  line-height: 1.55;
 }
 
-.badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+.specs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(105px, auto));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  overflow: hidden;
 }
 
-.badge {
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--stroke);
-  font-size: 0.82rem;
-  color: var(--muted);
+.specs > div {
+  min-width: 0;
+  padding: 12px 14px;
 }
 
-.badgeAction {
+.specs > div + div {
+  border-left: 1px solid var(--border);
+}
+
+.specs dt {
+  color: var(--text-faint);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.specs dd {
+  margin-top: 3px;
   color: var(--text);
-  border-color: rgba(110, 214, 198, 0.38);
-  background: rgba(110, 214, 198, 0.12);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .utilityLink:hover,
+  .logoutButton:hover {
+    color: var(--text);
+    border-color: var(--border-strong);
+    background: var(--surface-raised);
+  }
+}
+
+@media (max-width: 860px) {
+  .pageIntro {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .specs {
+    width: fit-content;
+  }
 }
 
 @media (max-width: 640px) {
-  .heroTop {
-    flex-direction: column;
+  .page {
+    padding: 0 16px 40px;
+  }
+
+  .appHeader {
+    min-height: auto;
     align-items: flex-start;
+    padding: 14px 0;
+  }
+
+  .brandContext,
+  .accountBlock {
+    display: none;
+  }
+
+  .headerActions {
+    gap: 8px;
+  }
+
+  .utilityLink,
+  .logoutButton {
+    min-height: 40px;
+    padding: 0 11px;
+  }
+
+  .pageIntro {
+    gap: 22px;
+    padding: 26px 0 22px;
+  }
+
+  .title {
+    font-size: clamp(2.15rem, 12vw, 3.15rem);
+  }
+
+  .specs {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .specs > div + div {
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
 }

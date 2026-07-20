@@ -14,8 +14,8 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VO Batch Leveler",
-  description: "Browser-based VO leveling and broadcast loudness prep.",
+  title: "Shorts Projektt | Voiceover Production",
+  description: "Internal voiceover processing, review, and delivery workspace.",
 };
 
 export default function RootLayout({
