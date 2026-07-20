@@ -9,7 +9,7 @@
 - [x] Remove AI Auto Pilot from the UI; retain its backend capability as optional and disabled by default.
 - [x] Run focused tests, `npm run test:audio-qc`, `npm run lint`, `npm run build`, and `git diff --check`.
 - [x] Verify the local rendered UI against the supplied reference, then review and commit the scoped diff.
-- [ ] Push `main` and verify the resulting Production deployment in Vercel using the X Chrome profile.
+- [x] Push `main` and verify the resulting Production deployment in Vercel using the X Chrome profile.
 
 ## Review Notes
 
@@ -17,6 +17,7 @@
 - Local browser verification in the X Chrome profile confirms the Mix-ready loudness target, Speech-aware leveler, and Cinematic color remain, while Keep mix-ready file, Neural Speech Enhancement, and AI Auto Pilot are absent with no layout gap.
 - Local route probes return 404 for removed `/api/neural-repair` and 405 for retained `/api/audio-review` on unsupported GET.
 - Independent code and security reviews found no high-severity issues. Two low-level neural residues in lint configuration and stale research guidance were removed and added to the regression contract.
+- GitHub `main` and Vercel Production both resolved to `7d6194d`; the X-profile Vercel dashboard reported the deployment Ready.
 
 # End-Spiked-Down Tail Protection
 
