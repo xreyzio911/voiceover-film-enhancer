@@ -1,3 +1,21 @@
+# Temporarily Remove Manual AI Review UI
+
+## Checklist
+
+- [x] Confirm the highlighted control is the manual AI Review entry point and isolate it from automatic processing integration.
+- [x] Add a failing feature-contract test for the absent button/dialog while preserving the backend integration.
+- [x] Remove the manual button, dialog lifecycle, markup, and now-unused styles.
+- [x] Verify the remaining Run Batch, Clear, and status controls in the rendered app.
+- [x] Run the full test, lint, build, diff, and review gates.
+- [x] Commit the scoped local change without staging `public/ffmpeg/ffmpeg-core.js`.
+
+## Review Notes
+
+- Scope is intentionally UI-only: the manual AI Review button and modal are temporarily removed. The existing processing pipeline and `/api/audio-review` implementation remain available.
+- Chrome QA at `http://localhost:3010/` found zero manual AI Review buttons/dialogs, Run Batch remained disabled with no files, Clear returned the workspace to `Idle`, tool switching preserved the VO workspace, and no console warnings/errors appeared.
+- Verification passed with 156 tests plus 1 intentional worker skip, clean lint, a production build, scoped diff checks, and no blockers from independent code/security review. The contract explicitly preserves both source-auto and post-render review call sites.
+- `npm audit --omit=dev` continues to report the existing Next.js high advisory plus three moderate transitive advisories; this UI-only change does not modify dependencies or lockfiles.
+
 # Processing Completion Fix and Experimental UI Style Port
 
 ## Checklist

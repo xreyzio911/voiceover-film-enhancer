@@ -3,7 +3,7 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import JSZip from "jszip";
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { analyzeFloatSamples, buildSpeechMask, type AudioQcMetrics } from "../lib/audioQc";
 import {
   detectAudibilityDropouts,
@@ -632,8 +632,6 @@ export default function VoLeveler({ aiAutoPilotEnabled }: { aiAutoPilotEnabled: 
   const activeQueueBaseRef = useRef<string | null>(null);
   const activeQueueStageRef = useRef<string>("Queued");
   const activeQueueProgressRef = useRef<number>(-1);
-  const aiReviewCloseRef = useRef<HTMLButtonElement | null>(null);
-  const aiReviewTriggerRef = useRef<HTMLButtonElement | null>(null);
   const processingControlsOverrideRef = useRef<AudioReviewControls | null>(null);
   const aiAdaptiveDirectivesOverrideRef = useRef<AudioReviewAdaptiveDirectives | null>(null);
   const sourceFirstCandidateVariantRef = useRef<
@@ -657,12 +655,7 @@ export default function VoLeveler({ aiAutoPilotEnabled }: { aiAutoPilotEnabled: 
   const [showFailureWarning, setShowFailureWarning] = useState(false);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [reviewBundles, setReviewBundles] = useState<ReviewBundleEntry[]>([]);
-  const [aiReviewFiles, setAiReviewFiles] = useState<AudioReviewFileInput[]>([]);
-  const [aiReviewOpen, setAiReviewOpen] = useState(false);
   const [aiReviewBusy, setAiReviewBusy] = useState(false);
-  const [aiReviewError, setAiReviewError] = useState<string | null>(null);
-  const [aiReviewResult, setAiReviewResult] = useState<AudioReviewResult | null>(null);
-  const [aiReviewModel, setAiReviewModel] = useState<string | null>(null);
   const [learnedReviewWeights, setLearnedReviewWeights] =
     useState<LearnedReviewWeights>(DEFAULT_LEARNED_REVIEW_WEIGHTS);
   const [learnedReviewWeightsSource, setLearnedReviewWeightsSource] =
@@ -730,23 +723,6 @@ export default function VoLeveler({ aiAutoPilotEnabled }: { aiAutoPilotEnabled: 
       ffmpegAssetUrlsRef.current = null;
     };
   }, []);
-
-  const closeAiReview = useCallback(() => {
-    setAiReviewOpen(false);
-    window.requestAnimationFrame(() => aiReviewTriggerRef.current?.focus());
-  }, []);
-
-  useEffect(() => {
-    if (!aiReviewOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        closeAiReview();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    window.requestAnimationFrame(() => aiReviewCloseRef.current?.focus());
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [aiReviewOpen, closeAiReview]);
 
   const appendLog = (message: string) => {
     setLogs((prev) => [...prev.slice(-300), message]);
@@ -1512,7 +1488,6 @@ const summarizeFailureReason = (error: unknown) => {
   ) => {
     if (aiReviewBusy || reviewFiles.length === 0) return null;
     setAiReviewBusy(true);
-    setAiReviewError(null);
     try {
       const response = await fetch("/api/audio-review", {
         method: "POST",
@@ -1532,8 +1507,6 @@ const summarizeFailureReason = (error: unknown) => {
       if (!response.ok || !payload?.review) {
         throw new Error(payload?.error || `AI review failed (HTTP ${response.status}).`);
       }
-      setAiReviewResult(payload.review);
-      setAiReviewModel(payload.model ?? null);
       appendLog(
         `[AIReview] ${payload.model ?? "Gemini"}: ${payload.review.verdict} (${Math.round(
           payload.review.confidence * 100,
@@ -1545,8 +1518,7 @@ const summarizeFailureReason = (error: unknown) => {
           })
         : null;
       return { review: payload.review, model: payload.model ?? null, plans };
-    } catch (error) {
-      setAiReviewError(error instanceof Error ? error.message : String(error));
+    } catch {
       if (options.source === "source-auto") {
         appendLog("[AIReview] Automated source review failed; using current deterministic profile.");
       }
@@ -6629,10 +6601,6 @@ const summarizeFailureReason = (error: unknown) => {
     setLogs([]);
     setFailedOptimizations([]);
     setShowFailureWarning(false);
-    setAiReviewFiles([]);
-    setAiReviewResult(null);
-    setAiReviewError(null);
-    setAiReviewModel(null);
     setStatus("Preparing...");
 
     try {
@@ -6726,8 +6694,6 @@ const summarizeFailureReason = (error: unknown) => {
             null,
           );
         });
-        setAiReviewFiles(sourceReviewFiles);
-
         if (aiAutoPilotEnabled && sourceReviewFiles.length > 0) {
           setStatus("AI review: reviewing source");
           const result = await runAiAudioReview(sourceReviewFiles, {
@@ -8512,10 +8478,6 @@ const summarizeFailureReason = (error: unknown) => {
                 setLogs([]);
                 setFailedOptimizations([]);
                 setShowFailureWarning(false);
-                setAiReviewFiles([]);
-                setAiReviewResult(null);
-                setAiReviewError(null);
-                setAiReviewModel(null);
                 setQueueItems([]);
                 activeQueueBaseRef.current = null;
                 activeQueueStageRef.current = "Queued";
@@ -8525,14 +8487,6 @@ const summarizeFailureReason = (error: unknown) => {
               disabled={loading}
             >
               Clear
-            </button>
-            <button
-              type="button"
-              ref={aiReviewTriggerRef}
-              className={`${styles.button} ${styles.buttonSecondary}`}
-              onClick={() => setAiReviewOpen(true)}
-            >
-              AI Review
             </button>
             <div className={styles.progress} role="status" aria-live="polite" aria-atomic="true">{status}</div>
           </div>
@@ -8795,156 +8749,6 @@ const summarizeFailureReason = (error: unknown) => {
                 Understood
               </button>
             </div>
-          </div>
-        </div>
-      )}
-      {aiReviewOpen && (
-        <div className={styles.aiReviewOverlay} role="dialog" aria-modal="true" aria-labelledby="ai-review-title">
-          <div className={styles.aiReviewModal}>
-            <div className={styles.aiReviewHeader}>
-              <div>
-                <h3 id="ai-review-title">AI Audio Review</h3>
-                <div className={styles.label}>
-                  {aiReviewFiles.length} file{aiReviewFiles.length === 1 ? "" : "s"} ready
-                  {aiReviewModel ? ` - ${aiReviewModel}` : ""}
-                </div>
-              </div>
-              <button
-                ref={aiReviewCloseRef}
-                type="button"
-                className={`${styles.button} ${styles.buttonGhost}`}
-                onClick={closeAiReview}
-              >
-                Close
-              </button>
-            </div>
-
-            <div className={styles.aiReviewActionBar}>
-              <span className={styles.aiReviewTiny}>
-                {aiReviewFiles
-                  .slice(-3)
-                  .map((file) => file.fileName)
-                  .join(", ")}
-              </span>
-              {aiReviewBusy && <span className={styles.aiReviewTiny}>Reviewing source...</span>}
-            </div>
-            {aiReviewError && (
-              <div className={styles.aiReviewError} aria-live="polite">
-                {aiReviewError}
-              </div>
-            )}
-
-            {aiReviewResult ? (
-              <div className={styles.aiReviewBody} aria-live="polite">
-                <div className={styles.aiReviewBadges}>
-                  <span className={styles.outputBadge}>{aiReviewResult.verdict.toUpperCase()}</span>
-                  <span className={styles.outputBadge}>{Math.round(aiReviewResult.confidence * 100)}% confidence</span>
-                  <span className={styles.outputBadge}>{aiReviewResult.perFileProfiles.length} per-audio profiles</span>
-                </div>
-
-                {aiReviewResult.perFileProfiles.map((fileReview) => (
-                  <div className={styles.aiReviewRecommendation} key={`${fileReview.base}-${fileReview.fileName}`}>
-                    <div className={styles.aiReviewRecommendationTop}>
-                      <strong>{fileReview.fileName}</strong>
-                      <span>{fileReview.recommendedProfile.selectedVariant}</span>
-                    </div>
-                    <div className={styles.aiReviewRecommendationTop}>
-                      <span>{fileReview.recommendedProfile.name}</span>
-                      <span>{Math.round(fileReview.confidence * 100)}% file confidence</span>
-                    </div>
-                    <div className={styles.aiReviewProfileGrid}>
-                      <span>Match: {fileReview.recommendedProfile.smartMatchMode}</span>
-                      <span>Leveler: {fileReview.recommendedProfile.leveler}</span>
-                      <span>Breath: {fileReview.recommendedProfile.breathControl}</span>
-                      <span>Warmth: {formatSigned(fileReview.adaptiveDirectives.warmthDb, 1)} dB</span>
-                      <span>Presence: {formatSigned(fileReview.adaptiveDirectives.presenceDb, 1)} dB</span>
-                      <span>Air: {formatSigned(fileReview.adaptiveDirectives.airDb, 1)} dB</span>
-                      <span>Sag: {formatSigned(fileReview.adaptiveDirectives.sagRecoveryBoost, 2)}</span>
-                      <span>De-harsh: {formatSigned(fileReview.adaptiveDirectives.deHarshDb, 1)} dB</span>
-                      <span>Polish: single pass {Math.round(fileReview.adaptiveDirectives.finalPolishIntensity * 100)}%</span>
-                      <span>Room: {fileReview.recommendedProfile.roomCleanup ? "on" : "off"}</span>
-                      <span>Harshness: {fileReview.recommendedProfile.softenHarshness ? "soften" : "normal"}</span>
-                      <span>Color: {fileReview.recommendedProfile.cinematicColor ? "on" : "off"}</span>
-                    </div>
-                    <p>{fileReview.summary}</p>
-                    {fileReview.recommendedProfile.notes && <p>{fileReview.recommendedProfile.notes}</p>}
-                  </div>
-                ))}
-
-                {aiReviewResult.profileRationale.length > 0 && (
-                  <div className={styles.aiReviewSection}>
-                    <strong>Profile Rationale</strong>
-                    <ul>
-                      {aiReviewResult.profileRationale.map((item, index) => (
-                        <li key={`${item}-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {aiReviewResult.adjustments.length > 0 && (
-                  <div className={styles.aiReviewSection}>
-                    <strong>Adjustments</strong>
-                    <div className={styles.aiReviewList}>
-                      {aiReviewResult.adjustments.map((adjustment, index) => (
-                        <div className={styles.aiReviewListItem} key={`${adjustment.control}-${index}`}>
-                          <div className={styles.aiReviewListTop}>
-                            <span>{adjustment.control}</span>
-                            <span>{adjustment.risk}</span>
-                          </div>
-                          <div>{adjustment.recommendation}</div>
-                          <small>{adjustment.why}</small>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {aiReviewResult.findings.length > 0 && (
-                  <div className={styles.aiReviewSection}>
-                    <strong>Findings</strong>
-                    <div className={styles.aiReviewList}>
-                      {aiReviewResult.findings.map((finding, index) => (
-                        <div className={styles.aiReviewListItem} key={`${finding.fileName}-${finding.issue}-${index}`}>
-                          <div className={styles.aiReviewListTop}>
-                            <span>{finding.fileName}</span>
-                            <span>{finding.severity}</span>
-                          </div>
-                          <div>{finding.issue}</div>
-                          <small>{finding.evidence}</small>
-                          <small>{finding.action}</small>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className={styles.aiReviewColumns}>
-                  <div className={styles.aiReviewSection}>
-                    <strong>Guardrails</strong>
-                    <ul>
-                      {aiReviewResult.guardrails.map((item, index) => (
-                        <li key={`${item}-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className={styles.aiReviewSection}>
-                    <strong>Listening Checks</strong>
-                    <ul>
-                      {aiReviewResult.nextListeningChecks.map((item, index) => (
-                        <li key={`${item}-${index}`}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className={styles.aiReviewEmpty}>
-                {aiReviewFiles.length === 0
-                  ? "Run a WAV batch first. The reviewer uses original source metrics and the pre-render adaptive profile."
-                  : "No AI review yet."}
-              </div>
-            )}
           </div>
         </div>
       )}

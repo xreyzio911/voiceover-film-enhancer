@@ -46,6 +46,17 @@ test("AI review backend remains available while Auto Pilot defaults off", () => 
   assert.match(readProjectFile(".env.example"), /^VO_AI_AUTO_PILOT_ENABLED=off$/m);
 });
 
+test("manual AI Review UI is absent while the processing integration remains available", () => {
+  const source = readProjectFile("src/components/VoLeveler.tsx");
+
+  assert.doesNotMatch(source, />\s*AI Review\s*</);
+  assert.doesNotMatch(source, /id="ai-review-title"/);
+  assert.doesNotMatch(source, /aiReviewOpen/);
+  assert.match(source, /runAiAudioReview/);
+  assert.match(source, /runAiAudioReview\(sourceReviewFiles,\s*\{[\s\S]*?source: "source-auto"/);
+  assert.match(source, /runAiAudioReview\(\[postReviewFile\],\s*\{[\s\S]*?source: "post-render"/);
+});
+
 test("AI Auto Pilot is optional and disabled unless explicitly enabled", () => {
   assert.equal(isAiAutoPilotEnabled(undefined), false);
   assert.equal(isAiAutoPilotEnabled(""), false);
