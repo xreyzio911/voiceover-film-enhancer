@@ -15,7 +15,6 @@ export type AudioReviewControls = {
   floorGuard: boolean;
   cinematicColor: boolean;
   gainPlannerEnabled: boolean;
-  neuralSpeechEnhancementEnabled: boolean;
 };
 
 export type AudioReviewMetricSnapshot = {
@@ -147,7 +146,6 @@ export type AudioReviewRecommendedProfile = {
   smartMatchMode: "Off" | "Gentle" | "Balanced";
   leveler: "Minimal (no auto-leveler)" | "Gentle" | "Balanced" | "Firm";
   breathControl: "Off" | "Light" | "Medium";
-  neuralSpeechEnhancement: "off";
   roomCleanup: boolean;
   softenHarshness: boolean;
   cinematicColor: boolean;
@@ -186,7 +184,6 @@ export type AudioReviewControlPatch = Partial<
     | "smartMatchMode"
     | "leveler"
     | "breathControl"
-    | "neuralSpeechEnhancementEnabled"
     | "roomCleanup"
     | "softenHarshness"
     | "cinematicColor"
@@ -271,7 +268,6 @@ const AUDIO_REVIEW_RECOMMENDED_PROFILE_SCHEMA = {
       enum: ["Minimal (no auto-leveler)", "Gentle", "Balanced", "Firm"],
     },
     breathControl: { type: "string", enum: ["Off", "Light", "Medium"] },
-    neuralSpeechEnhancement: { type: "string", enum: ["off"] },
     roomCleanup: { type: "boolean" },
     softenHarshness: { type: "boolean" },
     cinematicColor: { type: "boolean" },
@@ -283,7 +279,6 @@ const AUDIO_REVIEW_RECOMMENDED_PROFILE_SCHEMA = {
     "smartMatchMode",
     "leveler",
     "breathControl",
-    "neuralSpeechEnhancement",
     "roomCleanup",
     "softenHarshness",
     "cinematicColor",
@@ -415,7 +410,7 @@ The app pipeline you are reviewing:
 2. The app builds an adaptive profile per file: high-pass, low-mid warmth, presence/air correction, harshness cuts, de-esser depth, room cleanup, measured-SNR noise reduction, segmentation, tone matching against the batch reference, and cinematic color.
 3. The speech-aware gain planner runs before downstream dynamics. It normalizes speech runs toward a shared house target, micro-rides only where needed, ducks pauses, protects sentence endings, and locally tames plosives or body-relative speech spikes.
 4. Candidate variants are rendered and QC-scored: cinematic-stable, continuity-safe, pause-safe, and source-safe. Hard gates prefer stable volume, clean pauses, low compression artifacts, and controlled echo.
-5. Neural speech enhancement is temporarily disabled. Do not ask for ClearVoice, neural repair, neural cleanup, remote worker changes, neural strength changes, or a neural retry. The active path is source-first AI review, one app render, and one subtle final app polish.
+5. The active path is source-first AI review, one app render, and one subtle final app polish.
 6. Loudness normalization is a delivery step after mix-ready processing; it must not hide profile mistakes.
 
 Primary quality target: actors recorded with different microphones and settings should converge toward the same rich, smooth, balanced, crystal-clear, cinematic house tone while preserving actor identity and performance intent.
@@ -424,7 +419,7 @@ Known problem to hunt: cold-open dips where the first few words sit below the la
 
 You must return one perFileProfiles entry for every input file. Each file needs its own recommendedProfile and adaptiveDirectives. Do not collapse the batch into one shared profile; use the batch only as a house-tone reference. Use adaptiveDirectives as bounded micro-intents for the adaptive DSP: warmth/presence/air bias, de-harshing, sag recovery, onset/breath taming, denoise/room bias, compression bias, and single-pass final polish intensity. These are expert nudges, not raw filter graphs.
 
-Review depth requirement: do not give generic feedback. For each per-file recommendation, include concrete metric evidence, the exact app-side control or adaptiveDirective to use, the expected audible change, and the acceptance check. Guardrails must be phrased as things the app can enforce or the editor can verify; never write guardrails that imply changing neural enhancement internals or reranking multiple candidates.
+Review depth requirement: do not give generic feedback. For each per-file recommendation, include concrete metric evidence, the exact app-side control or adaptiveDirective to use, the expected audible change, and the acceptance check. Guardrails must be phrased as things the app can enforce or the editor can verify; never write guardrails that imply unimplemented processing stages or reranking multiple candidates.
 
 Return only valid JSON matching the schema. Keep each string concise and concrete. If objective metrics are insufficient, say what to listen for rather than inventing certainty.
 `.trim();
@@ -562,7 +557,6 @@ const normalizeControls = (value: unknown): AudioReviewControls | null => {
     floorGuard: boolOrFalse(value.floorGuard),
     cinematicColor: boolOrFalse(value.cinematicColor),
     gainPlannerEnabled: boolOrFalse(value.gainPlannerEnabled),
-    neuralSpeechEnhancementEnabled: boolOrFalse(value.neuralSpeechEnhancementEnabled),
   };
 };
 
@@ -769,7 +763,6 @@ export const buildAudioReviewUserPrompt = (payload: AudioReviewRequestPayload) =
       ? "Required corrective pipeline: rendered QC evidence -> per-file corrective adaptiveDirectives -> one app re-render -> learned ranker keeps the corrective only if it is materially better."
       : "Required source-first pipeline: per-audio AI review -> per-file adaptive profile -> one app pass -> one subtle final app polish -> result.",
     "App pipeline reminder: source analysis metrics -> per-file AI profile selection -> adaptive profile -> speech-aware gain planner -> one AI-selected render variant -> one subtle final app polish -> loudness delivery.",
-    "Neural speech enhancement is temporarily off. Always set neuralSpeechEnhancement to off. Do not recommend ClearVoice, neural repair, neural worker setup, neural bypass logic, neural strength changes, or neural retry behavior.",
     isPostRender
       ? "Candidate reranking is allowed only between the selected render and one corrective render. Do not ask for more challengers or iterative loops."
       : "Candidate reranking is temporarily off. Pick exactly one selectedVariant from source evidence before render; do not ask for challenger renders, learned reranking, review bundles, or post-render winner selection.",
@@ -872,7 +865,6 @@ export const buildAudioReviewControlPatch = (
     smartMatchMode: profile.smartMatchMode,
     leveler: profile.leveler,
     breathControl: profile.breathControl,
-    neuralSpeechEnhancementEnabled: false,
     roomCleanup: profile.roomCleanup,
     softenHarshness: profile.softenHarshness,
     cinematicColor: profile.cinematicColor,
@@ -907,7 +899,6 @@ export const buildSourceFirstAudioReviewPlan = (
     controls: {
       ...currentControls,
       ...patch.controls,
-      neuralSpeechEnhancementEnabled: false,
     },
     changedKeys: patch.changedKeys,
     selectedVariant: fileReview.recommendedProfile.selectedVariant,
@@ -939,7 +930,6 @@ const normalizeRecommendedProfile = (value: unknown): AudioReviewRecommendedProf
       "Balanced",
     ),
     breathControl: stringEnum(profile.breathControl, ["Off", "Light", "Medium"] as const, "Medium"),
-    neuralSpeechEnhancement: "off",
     roomCleanup: boolOrFalse(profile.roomCleanup),
     softenHarshness: boolOrFalse(profile.softenHarshness),
     cinematicColor: boolOrFalse(profile.cinematicColor),

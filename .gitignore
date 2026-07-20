@@ -3,7 +3,6 @@
 # dependencies
 /node_modules
 /.venv-audio-splitter
-/.venv-neural
 /.audio-separator-models
 /checkpoints
 /_qctest

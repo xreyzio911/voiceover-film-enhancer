@@ -28,7 +28,6 @@ const baseControls = {
   floorGuard: true,
   cinematicColor: true,
   gainPlannerEnabled: true,
-  neuralSpeechEnhancementEnabled: false,
 };
 
 const reviewPayload = {
@@ -111,8 +110,7 @@ test("audio review prompt teaches Gemini the app pipeline and failure priorities
   assert.match(prompt, /source-first/i);
   assert.match(prompt, /before rendering/i);
   assert.match(prompt, /per-audio AI review -> per-file adaptive profile -> one app pass -> one subtle final app polish/i);
-  assert.match(prompt, /neural speech enhancement is temporarily off/i);
-  assert.match(prompt, /Always set neuralSpeechEnhancement to off/i);
+  assert.equal(prompt.toLowerCase().includes("neural"), false);
   assert.match(prompt, /Candidate reranking is temporarily off/i);
   assert.match(prompt, /one selectedVariant from source evidence/i);
   assert.match(prompt, /one perFileProfiles item per input file/i);
@@ -143,7 +141,7 @@ test("Gemini request uses Flash-Lite with low thinking and JSON schema output", 
   assert.ok(schema.properties?.perFileProfiles);
   assert.match(request.body.systemInstruction.parts[0].text, /VO mastering/i);
   assert.match(request.body.systemInstruction.parts[0].text, /source-first AI review, one app render, and one subtle final app polish/i);
-  assert.match(request.body.systemInstruction.parts[0].text, /never write guardrails that imply changing neural enhancement internals/i);
+  assert.match(request.body.systemInstruction.parts[0].text, /never write guardrails that imply unimplemented processing stages/i);
 });
 
 test("normalizes review payloads and bounds batch size", () => {
@@ -220,7 +218,6 @@ test("merges chunked Gemini review results in original file order with worst ver
       smartMatchMode: "Balanced" as const,
       leveler: "Gentle" as const,
       breathControl: "Medium" as const,
-      neuralSpeechEnhancement: "off" as const,
       roomCleanup: true,
       softenHarshness: true,
       cinematicColor: true,
@@ -335,7 +332,6 @@ test("parses Gemini JSON review and clamps unsafe confidence values", () => {
             "smartMatchMode": "Balanced",
             "leveler": "Balanced",
             "breathControl": "Medium",
-            "neuralSpeechEnhancement": "off",
             "roomCleanup": true,
             "softenHarshness": true,
             "cinematicColor": true,
@@ -392,7 +388,6 @@ test("parses Gemini JSON review and clamps unsafe confidence values", () => {
   assert.equal(parsed.perFileProfiles[0].base, "actor_a");
   assert.equal(parsed.perFileProfiles[0].confidence, 1);
   assert.equal(parsed.perFileProfiles[0].recommendedProfile.selectedVariant, "continuity-safe");
-  assert.equal(parsed.perFileProfiles[0].recommendedProfile.neuralSpeechEnhancement, "off");
   assert.deepEqual(parsed.perFileProfiles[0].adaptiveDirectives, {
     warmthDb: 1.8,
     presenceDb: -1.6,
@@ -431,7 +426,6 @@ test("parses Gemini review with a missing comma between adjacent array strings",
             "smartMatchMode": "Balanced",
             "leveler": "Gentle",
             "breathControl": "Medium",
-            "neuralSpeechEnhancement": "off",
             "roomCleanup": true,
             "softenHarshness": true,
             "cinematicColor": true,
@@ -494,7 +488,6 @@ test("builds a bounded automatic control patch from Gemini profile recommendatio
             "smartMatchMode": "Balanced",
             "leveler": "Gentle",
             "breathControl": "Light",
-            "neuralSpeechEnhancement": "off",
             "roomCleanup": true,
             "softenHarshness": true,
             "cinematicColor": true,
@@ -534,7 +527,6 @@ test("builds a bounded automatic control patch from Gemini profile recommendatio
     smartMatchMode: "Gentle",
     leveler: "Firm",
     breathControl: "Medium",
-    neuralSpeechEnhancementEnabled: false,
     roomCleanup: false,
     softenHarshness: false,
     cinematicColor: false,
@@ -577,7 +569,6 @@ test("builds separate source-first render plans from per-file Gemini recommendat
             "smartMatchMode": "Balanced",
             "leveler": "Gentle",
             "breathControl": "Light",
-            "neuralSpeechEnhancement": "off",
             "roomCleanup": false,
             "softenHarshness": true,
             "cinematicColor": true,
@@ -614,7 +605,6 @@ test("builds separate source-first render plans from per-file Gemini recommendat
             "smartMatchMode": "Gentle",
             "leveler": "Firm",
             "breathControl": "Medium",
-            "neuralSpeechEnhancement": "off",
             "roomCleanup": true,
             "softenHarshness": false,
             "cinematicColor": true,
@@ -654,7 +644,6 @@ test("builds separate source-first render plans from per-file Gemini recommendat
     smartMatchMode: "Gentle",
     leveler: "Firm",
     breathControl: "Medium",
-    neuralSpeechEnhancementEnabled: false,
     roomCleanup: true,
     softenHarshness: false,
     cinematicColor: false,
@@ -670,7 +659,6 @@ test("builds separate source-first render plans from per-file Gemini recommendat
     smartMatchMode: "Balanced",
     leveler: "Gentle",
     breathControl: "Light",
-    neuralSpeechEnhancementEnabled: false,
     roomCleanup: false,
     softenHarshness: true,
     cinematicColor: true,

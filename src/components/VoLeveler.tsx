@@ -65,6 +65,7 @@ import { planBatchLoudnessAlignment } from "../lib/batchLoudnessAlign";
 import { decodeWav, encodeWavFloat32 } from "../lib/webAudioRender";
 import { queueBrowserDownload, triggerBrowserDownload } from "../lib/downloadBlob";
 import { estimateVoZipBytes, planVoZipExportParts } from "../lib/downloadPolicy";
+import { shouldEmitMixReadyOutput } from "../lib/outputDeliveryPolicy";
 import {
   formatLongFormPartTag,
   planLongFormChunks,
@@ -242,8 +243,6 @@ const PLANNER_K_TARGET_OFFSET_DB = 0.0;
  * emitting planner-off legacy output.
  */
 const GAIN_PLANNER_MAX_DURATION_SECONDS = 4800; // 80 minutes — fine at 16 kHz mono
-const NEURAL_SPEECH_ENHANCEMENT_ENABLED_BY_DEFAULT =
-  false;
 const sanitizeBase = (name: string) =>
   name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9-_]+/g, "_");
 
@@ -263,9 +262,6 @@ const assertUsableWavBytes = (bytes: Uint8Array, label: string) => {
   }
   return byteLength;
 };
-
-const enhancedOutputName = (name: string) =>
-  /\.wav$/i.test(name) ? name.replace(/\.wav$/i, "_enhanced.wav") : `${name}_enhanced.wav`;
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const toOddInt = (value: number, min: number, max: number) => {
@@ -367,7 +363,7 @@ type OutputEntry = {
   size: number;
   kind: "mixready" | "loudness";
   variant: "clean" | "blend";
-  processingFlow: "app" | "app-final-polish" | "app-neural-speech-enhancement-app";
+  processingFlow: "app" | "app-final-polish";
   sourceBase?: string;
   sourceName?: string;
   partIndex?: number;
@@ -624,7 +620,7 @@ const createEmptyAnalysis = (): FileAnalysis => ({
   longSparseModeEligible: null,
 });
 
-export default function VoLeveler() {
+export default function VoLeveler({ aiAutoPilotEnabled }: { aiAutoPilotEnabled: boolean }) {
   const ffmpegRef = useRef<FFmpeg | null>(null);
   const ffmpegLoadPromiseRef = useRef<Promise<FFmpeg> | null>(null);
   const ffmpegAssetUrlsRef = useRef<FfmpegAssetUrls | null>(null);
@@ -663,8 +659,6 @@ export default function VoLeveler() {
   const [aiReviewError, setAiReviewError] = useState<string | null>(null);
   const [aiReviewResult, setAiReviewResult] = useState<AudioReviewResult | null>(null);
   const [aiReviewModel, setAiReviewModel] = useState<string | null>(null);
-  const [aiAutoPilotEnabled, setAiAutoPilotEnabled] = useState(true);
-  const [aiAutoPilotStatus, setAiAutoPilotStatus] = useState<string | null>(null);
   const [learnedReviewWeights, setLearnedReviewWeights] =
     useState<LearnedReviewWeights>(DEFAULT_LEARNED_REVIEW_WEIGHTS);
   const [learnedReviewWeightsSource, setLearnedReviewWeightsSource] =
@@ -673,8 +667,6 @@ export default function VoLeveler() {
   const [loudnessTarget, setLoudnessTarget] = useState<keyof typeof LOUDNESS_PRESETS>(
     "Mix-ready only (no loudness normalize)"
   );
-  // Only applies when a loudness-normalized export is selected; mix-ready mode always emits the mix-ready file.
-  const [keepMixReady, setKeepMixReady] = useState(false);
   const [smartMatchMode, setSmartMatchMode] = useState<keyof typeof SMART_MATCH_PRESETS>("Balanced");
   const [eqCleanup, setEqCleanup] = useState(true);
   const [breathControl, setBreathControl] = useState<keyof typeof BREATH_COMPAND>("Medium");
@@ -686,9 +678,6 @@ export default function VoLeveler() {
   const [floorGuard, setFloorGuard] = useState(true);
   const [cinematicColor, setCinematicColor] = useState(true);
   const [gainPlannerEnabled, setGainPlannerEnabled] = useState(true);
-  const [neuralSpeechEnhancementEnabled, setNeuralSpeechEnhancementEnabled] = useState(
-    NEURAL_SPEECH_ENHANCEMENT_ENABLED_BY_DEFAULT,
-  );
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const loudnessConfig = useMemo(() => LOUDNESS_PRESETS[loudnessTarget], [loudnessTarget]);
@@ -707,7 +696,6 @@ export default function VoLeveler() {
       floorGuard,
       cinematicColor,
       gainPlannerEnabled,
-      neuralSpeechEnhancementEnabled: false,
     }),
     [
       loudnessTarget,
@@ -1503,11 +1491,10 @@ const summarizeFailureReason = (error: unknown) => {
       sourceFirstPlansByBaseRef.current = plans;
     }
 
-    const label = source === "source-auto" ? "AI Auto Pilot" : "AI review";
+    const label = source === "source-auto" ? "Automated AI review" : "AI review";
     const statusText = `${label} selected ${review.perFileProfiles.length} per-audio source-first profile${
       review.perFileProfiles.length === 1 ? "" : "s"
     }.`;
-    setAiAutoPilotStatus(statusText);
     appendLog(`[AIReview] ${statusText}`);
     return plans;
   };
@@ -1524,9 +1511,6 @@ const summarizeFailureReason = (error: unknown) => {
     if (aiReviewBusy || reviewFiles.length === 0) return null;
     setAiReviewBusy(true);
     setAiReviewError(null);
-    setAiAutoPilotStatus(
-      options.source === "source-auto" ? "AI Auto Pilot is reviewing source audio before rendering..." : null,
-    );
     try {
       const response = await fetch("/api/audio-review", {
         method: "POST",
@@ -1561,11 +1545,9 @@ const summarizeFailureReason = (error: unknown) => {
       return { review: payload.review, model: payload.model ?? null, plans };
     } catch (error) {
       setAiReviewError(error instanceof Error ? error.message : String(error));
-      setAiAutoPilotStatus(
-        options.source === "source-auto"
-          ? "AI Auto Pilot source review failed; using current deterministic profile."
-          : null,
-      );
+      if (options.source === "source-auto") {
+        appendLog("[AIReview] Automated source review failed; using current deterministic profile.");
+      }
       return null;
     } finally {
       setAiReviewBusy(false);
@@ -4146,11 +4128,9 @@ const summarizeFailureReason = (error: unknown) => {
     metadata: Pick<OutputEntry, "sourceBase" | "sourceName" | "partIndex" | "partTotal"> = {},
   ): Promise<OutputEntry> => {
     const bytes = await readVirtualFileBytes(ffmpeg, name);
-    const outputName = processingFlow === "app-neural-speech-enhancement-app" ? enhancedOutputName(name) : name;
-
     const blob = new Blob([bytes], { type: "audio/wav" });
     return {
-      name: outputName,
+      name,
       blob,
       size: blob.size,
       kind,
@@ -5538,7 +5518,7 @@ const summarizeFailureReason = (error: unknown) => {
         await assertDurationDeltaWithin(ffmpeg, `Long-form mix ${job.base} ${partTag}`, chunk.durationSec, mixChunkName);
         await assertTruePeakWithin(ffmpeg, `Long-form mix ${job.base} ${partTag}`, mixChunkName);
 
-        if (keepMixReady || loudnessConfig === null) {
+        if (shouldEmitMixReadyOutput(loudnessConfig !== null)) {
           stagedOutputs.push(
             await writeOutput(ffmpeg, mixChunkName, "mixready", "clean", chunkFlow, {
               sourceBase: job.base,
@@ -5562,7 +5542,7 @@ const summarizeFailureReason = (error: unknown) => {
             await assertDurationDeltaWithin(ffmpeg, `Long-form blend ${job.base} ${partTag}`, chunk.durationSec, blendChunkName);
             await assertTruePeakWithin(ffmpeg, `Long-form blend ${job.base} ${partTag}`, blendChunkName);
             blendRendered = true;
-            if (keepMixReady || loudnessConfig === null) {
+            if (shouldEmitMixReadyOutput(loudnessConfig !== null)) {
               stagedOutputs.push(
                 await writeOutput(ffmpeg, blendChunkName, "mixready", "blend", chunkFlow, {
                   sourceBase: job.base,
@@ -6649,7 +6629,6 @@ const summarizeFailureReason = (error: unknown) => {
     setAiReviewResult(null);
     setAiReviewError(null);
     setAiReviewModel(null);
-    setAiAutoPilotStatus(null);
     setStatus("Preparing...");
 
     try {
@@ -6746,7 +6725,7 @@ const summarizeFailureReason = (error: unknown) => {
         setAiReviewFiles(sourceReviewFiles);
 
         if (aiAutoPilotEnabled && sourceReviewFiles.length > 0) {
-          setStatus("AI Auto Pilot: reviewing source");
+          setStatus("AI review: reviewing source");
           const result = await runAiAudioReview(sourceReviewFiles, {
             autoApply: true,
             activateCurrentRun: true,
@@ -7754,7 +7733,7 @@ const summarizeFailureReason = (error: unknown) => {
             }
           }
 
-          if (keepMixReady || loudnessConfig === null) {
+          if (shouldEmitMixReadyOutput(loudnessConfig !== null)) {
             const mixOutput = await writeOutput(ffmpeg, job.mixName, "mixready", "clean", outputProcessingFlow, {
               sourceBase: job.base,
               sourceName: job.file.name,
@@ -7774,7 +7753,7 @@ const summarizeFailureReason = (error: unknown) => {
                 await runBlendMixReady(ffmpeg, job.mixName, job.blendMixName, profile);
                 await applyFinalConsonantPeakPolish(ffmpeg, job.blendMixName, `${job.base} blend`);
                 blendRendered = true;
-                if (keepMixReady || loudnessConfig === null) {
+                if (shouldEmitMixReadyOutput(loudnessConfig !== null)) {
                   const blendMixOutput = await writeOutput(
                     ffmpeg,
                     job.blendMixName,
@@ -8005,9 +7984,7 @@ const summarizeFailureReason = (error: unknown) => {
       noiseGuard,
       floorGuard,
       sceneBlend,
-      keepMixReady,
       gainPlannerEnabled,
-      neuralSpeechEnhancement: false,
       reviewReranker: "paused-temporary-single-render",
     },
     files: manifestOutputs.map((output) => ({
@@ -8369,47 +8346,6 @@ const summarizeFailureReason = (error: unknown) => {
               onChange={(event) => setCinematicColor(event.target.checked)}
             />
           </div>
-          <div className={styles.toggleRow}>
-            <div>
-              <strong>Keep mix-ready file</strong>
-              <div className={styles.label}>Store _mixready.wav alongside loudness exports</div>
-            </div>
-            <input
-              type="checkbox"
-              checked={keepMixReady}
-              onChange={(event) => setKeepMixReady(event.target.checked)}
-              disabled={loudnessConfig === null}
-            />
-          </div>
-          <div className={styles.toggleRow}>
-            <div>
-              <strong>Neural speech enhancement</strong>
-              <div className={styles.label}>
-                Temporarily disabled. The active chain is AI review, app render, then one subtle final app polish.
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={neuralSpeechEnhancementEnabled}
-              disabled
-              onChange={() => setNeuralSpeechEnhancementEnabled(false)}
-            />
-          </div>
-          <div className={styles.toggleRow}>
-            <div>
-              <strong>AI Auto Pilot</strong>
-              <div className={styles.label}>
-                Reviews original source audio first, applies a safe adaptive profile, then renders once through the app and final app touch.
-              </div>
-              {aiAutoPilotStatus && <div className={styles.label}>{aiAutoPilotStatus}</div>}
-            </div>
-            <input
-              type="checkbox"
-              checked={aiAutoPilotEnabled}
-              onChange={(event) => setAiAutoPilotEnabled(event.target.checked)}
-            />
-          </div>
-
           <button
             type="button"
             className={`${styles.button} ${styles.buttonGhost} ${styles.sectionTop}`}
@@ -8753,9 +8689,6 @@ const summarizeFailureReason = (error: unknown) => {
                     <span className={styles.outputBadge}>
                       {output.variant === "blend" ? "Blend pass" : "Clean pass"}
                     </span>
-                    {output.processingFlow === "app-neural-speech-enhancement-app" && (
-                      <span className={styles.outputBadge}>Neural enhancement + app</span>
-                    )}
                     {output.processingFlow === "app-final-polish" && (
                       <span className={styles.outputBadge}>Final app polish</span>
                     )}
@@ -8865,8 +8798,6 @@ const summarizeFailureReason = (error: unknown) => {
               </span>
               {aiReviewBusy && <span className={styles.aiReviewTiny}>Reviewing source...</span>}
             </div>
-            {aiAutoPilotStatus && <div className={styles.aiReviewTiny}>{aiAutoPilotStatus}</div>}
-
             {aiReviewError && (
               <div className={styles.aiReviewError} aria-live="polite">
                 {aiReviewError}

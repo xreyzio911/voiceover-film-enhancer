@@ -1,3 +1,23 @@
+# Stable UI Feature Removal and Auto Pilot Disablement
+
+## Checklist
+
+- [x] Map Keep mix-ready file, Neural Speech Enhancement, and AI Auto Pilot across UI, processing, API, environment, and tests.
+- [x] Add or update focused tests for the removed UI, removed neural path, retained mix-ready loudness target, and disabled-by-default backend Auto Pilot.
+- [x] Remove the Keep mix-ready file UI/output option while preserving the Mix-ready loudness target.
+- [x] Remove Neural Speech Enhancement entirely without touching Audio Track Splitter.
+- [x] Remove AI Auto Pilot from the UI; retain its backend capability as optional and disabled by default.
+- [x] Run focused tests, `npm run test:audio-qc`, `npm run lint`, `npm run build`, and `git diff --check`.
+- [x] Verify the local rendered UI against the supplied reference, then review and commit the scoped diff.
+- [ ] Push `main` and verify the resulting Production deployment in Vercel using the X Chrome profile.
+
+## Review Notes
+
+- Focused removal/review tests pass 18/18. The full audio-QC suite passes 152 tests with the optional splitter smoke skipped; lint and production build pass.
+- Local browser verification in the X Chrome profile confirms the Mix-ready loudness target, Speech-aware leveler, and Cinematic color remain, while Keep mix-ready file, Neural Speech Enhancement, and AI Auto Pilot are absent with no layout gap.
+- Local route probes return 404 for removed `/api/neural-repair` and 405 for retained `/api/audio-review` on unsupported GET.
+- Independent code and security reviews found no high-severity issues. Two low-level neural residues in lint configuration and stale research guidance were removed and added to the regression contract.
+
 # End-Spiked-Down Tail Protection
 
 ## Checklist

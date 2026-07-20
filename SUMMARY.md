@@ -121,7 +121,8 @@ Latest state at handoff: both pass successfully.
 ## Guardrails Preserved
 
 - Audio Splitter files were not modified.
-- Neural speech enhancement remains disabled by default and constrained to the existing off path.
+- Neural speech enhancement and its route, workers, client/runtime modules, review fields, and UI were removed.
+- Automated source-first AI review remains available only through the server-side `VO_AI_AUTO_PILOT_ENABLED` opt-in and defaults off; manual AI Review remains available.
 - Corrective and head-prime stages fail closed to the existing render behavior.
 
 ## Verification

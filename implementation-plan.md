@@ -9,7 +9,7 @@ Goal: unify batch VO (20–30 min files, mixed mic quality per actor) into a con
 ## 0. Ground rules (read first)
 
 1. **Do not touch the Audio Splitter.** No changes to `src/components/AudioTrackSplitter.tsx`, `src/app/api/audio-splitter/**`, `src/lib/audioSplitterJobs.ts`, `src/lib/audioSplitterService.ts`, `scripts/audio_separator_worker.py`, `scripts/setup-audio-splitter.ps1`.
-2. **Neural speech enhancement stays disabled.** Do not wire `requestNeuralRepair` into the render path. Keep `NEURAL_SPEECH_ENHANCEMENT_ENABLED_BY_DEFAULT = false` and the "always off" rules in `aiAudioReview.ts`.
+2. **Neural speech enhancement is removed.** Do not add a neural route, worker, client, review schema field, or render stage back into this application.
 3. **Never regress the existing hard gates**: output duration delta ≤ 0.05 s, offset ≤ 0.08 s, true peak ≤ −1.5 dB (learned-gate) / limiter at −2 dB, no ending damage. Every new stage must fail closed to current behavior (log + fallback, never crash the batch).
 4. **All tuning constants introduced by this plan live in named constants** (grouped near the top of the owning module) so any single feature can be reverted by flipping one constant.
 5. After each phase: `npm run lint`, `npm run build`, `npm run test:audio-qc` must pass.

@@ -12,7 +12,7 @@ const TOOLS: { id: ToolId; label: string }[] = [
   { id: "audio-splitter", label: "Audio Track Splitter" },
 ];
 
-export default function AppTools() {
+export default function AppTools({ aiAutoPilotEnabled }: { aiAutoPilotEnabled: boolean }) {
   const [activeTool, setActiveTool] = useState<ToolId>("vo-leveler");
 
   return (
@@ -31,7 +31,11 @@ export default function AppTools() {
           </button>
         ))}
       </div>
-      {activeTool === "vo-leveler" ? <VoLeveler /> : <AudioTrackSplitter />}
+      {activeTool === "vo-leveler" ? (
+        <VoLeveler aiAutoPilotEnabled={aiAutoPilotEnabled} />
+      ) : (
+        <AudioTrackSplitter />
+      )}
     </div>
   );
 }

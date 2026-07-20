@@ -4,6 +4,7 @@ import AppTools from "@/components/AppTools";
 import SignOutButton from "@/components/SignOutButton";
 import { getServerAuthSession } from "@/auth";
 import { isAllowedEmail } from "@/lib/authAllowlist";
+import { isAiAutoPilotEnabled } from "@/lib/aiAutoPilotPolicy";
 import { isLocalHost } from "@/lib/isLocalHost";
 import { redirect } from "next/navigation";
 import styles from "./page.module.css";
@@ -40,7 +41,7 @@ export default async function Home() {
             )}
           </div>
         </header>
-        <AppTools />
+        <AppTools aiAutoPilotEnabled={isAiAutoPilotEnabled(process.env.VO_AI_AUTO_PILOT_ENABLED)} />
       </div>
     </div>
   );
